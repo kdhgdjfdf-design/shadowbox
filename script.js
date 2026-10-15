@@ -1,8 +1,9 @@
 /* =====================================================================
-   ShadowBox AI — منطق التطبيق
-   - كشف الجسم عبر MediaPipe Pose Landmarker (يعمل داخل المتصفح)
-   - عدّ اللكمات عبر: سرعة المعصم + امتداد الذراع + تقدّم المعصم نحو الكاميرا
-   - الكيس الافتراضي يُرسم على Canvas مع فيزياء بسيطة للاهتزاز
+   ShadowBox AI — منطق التطبيق (الإصدار 2)
+   - كشف الجسم عبر MediaPipe Pose Landmarker (داخل المتصفح، بدون رفع صور)
+   - عدّ اللكمات من حركة المعصم والذراع، لا من زر
+   - أهداف على شكل قفاز تقترب منك، وتظهر واحدة جديدة بعد كل ضربة
+   - أعمدة تقترب منك، عليك التحرك يمينًا أو يسارًا لتفاديها
    ===================================================================== */
 
 // ---------- روابط الموارد ----------
@@ -12,20 +13,28 @@ const MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
 const STORAGE_KEY = "shadowbox_sessions_v1";
 
-// ---------- ثوابت الكشف (قابلة للضبط) ----------
+// ---------- ثوابت الكشف عن اللكمات (قابلة للضبط) ----------
 const CFG = {
-  EXT_ON: 1.3,       // المسافة (بوحدة عرض الكتف) بين الكتف والمعصم لاعتبار الذراع ممدودة
-  EXT_OFF: 1.05,     // أقل من هذا تُعتبر الذراع مسترخية، فتُعاد تهيئة اللكمة التالية
-  Z_ON: 0.45,        // تقدّم المعصم نحو الكاميرا (عمق) لاعتبار اللكمة أمامية
+  EXT_ON: 1.3,       // امتداد الذراع (بوحدة عرض الكتف) لاعتبارها ممدودة
+  EXT_OFF: 1.05,     // أقل من هذا تُعتبر الذراع مسترخية
+  Z_ON: 0.45,        // تقدّم المعصم نحو الكاميرا لاعتبار اللكمة أمامية
   Z_OFF: 0.25,       // أقل من هذا يُعتبر المعصم عائدًا
-  SPEED_MIN: 3.5,    // أقل سرعة للمعصم (عرض كتف لكل ثانية) لتُحسب لكمة
+  SPEED_MIN: 3.5,    // أقل سرعة للمعصم (عرض كتف لكل ثانية)
   COOLDOWN_MS: 380,  // فترة صمت بين لكمتين لمنع العدّ المزدوج
   WINDOW_MS: 160,    // نافذة قياس السرعة
   VIS_MIN: 0.5,      // أقل درجة ظهور للمفصل
   SW_MIN: 0.10,      // أقل عرض كتف (نسبة لعرض الفيديو) للمعايرة
-  SW_MAX: 0.45,      // أكبر عرض كتف مسموح (أي أن الشخص قريب جدًا)
+  SW_MAX: 0.45,      // أكبر عرض كتف مسموح
   READY_HOLD_MS: 1000,
 };
+
+// ---------- إعدادات الأهداف والأعمدة ----------
+const TARGET_MS = 2200;        // زمن اقتراب القفاز من البعيد إلى القريب
+const TARGET_GAP_MS = 700;     // انتظار قصير قبل ظهور القفاز التالي
+const PILLAR_MS = 3000;        // زمن اقتراب العمود
+const PILLAR_JUDGE_K = 0.92;   // لحظة الحكم على العمود (قرب الكاميرا)
+const PILLAR_GAP_MIN = 4000;   // أقل فاصل بين عمودين (مللي ثانية)
+const PILLAR_GAP_RAND = 3000;  // زيادة عشوائية على الفاصل
 
 // ---------- مساعدات DOM ----------
 const $ = (id) => document.getElementById(id);
@@ -34,7 +43,7 @@ const IDS = [
   "roundSec", "roundCount", "restSec", "stanceSel", "facingSel", "soundToggle",
   "btnStart", "btnHistory", "btnHelp", "homeMsg", "banner",
   "roundLabel", "timer", "statusPill", "total", "leftCount", "rightCount",
-  "jabCount", "crossCount", "hits", "ppm",
+  "jabCount", "crossCount", "hits", "ppm", "targetHits", "dodges", "pillarHits",
   "btnPause", "btnStance", "btnCam", "btnStop", "toast",
   "calibOverlay", "calibStatus", "calibBtn", "calibCancel",
   "restOverlay", "restCount", "restNext", "restSkip",
@@ -71,7 +80,7 @@ let lastPose = null;             // آخر مجموعة نقاط للجسم
 let poseSW = 0;                  // عرض الكتفين بالبكسل (في فضاء الفيديو)
 let stableSince = 0, calibReady = false;
 
-let lastVideoTime = -1, lastTs = 0, rafId = 0;
+let lastTs = 0, rafId = 0;
 let lastDetectTs = -1;           // آخر طابع وقت أُرسل للكشف (يجب أن يكون متزايدًا)
 let vw = 0, vh = 0;              // أبعاد الفيديو
 let cw = 0, ch = 0, dpr = 1;     // أبعاد الـ canvas (CSS px)
@@ -79,11 +88,16 @@ let scale = 1, offX = 0, offY = 0;
 
 let floaters = [];
 let bag = createBag();
+let targets = [];                // أهداف القفاز: {state: live|hit|miss, lane, k, age}
+let pillars = [];                // الأعمدة: {lane, k, judged}
+let nextTargetAt = 0, nextPillarAt = 0;
+let flashRed = 0;                // وميض أحمر عند ضربة من عمود
 let audioCtx = null;
 let toastTimer = 0;
 
 function freshStats() {
-  return { total: 0, left: 0, right: 0, jab: 0, cross: 0, hits: 0 };
+  return { total: 0, left: 0, right: 0, jab: 0, cross: 0, hits: 0,
+           targetHits: 0, targetMiss: 0, dodges: 0, pillarHits: 0 };
 }
 function freshHand() {
   return { armed: true, hist: [], lastPunch: -1e9 };
@@ -100,6 +114,9 @@ function dropHandTracking() {
 }
 function createBag() {
   return { angle: 0, vel: 0, flash: 0, dir: 1 };
+}
+function pickLane() {
+  return [-1, 0, 1][Math.floor(Math.random() * 3)];
 }
 
 // ---------- أدوات عامة ----------
@@ -132,6 +149,9 @@ function showScreen(name) {
   el.homeScreen.classList.toggle("active", name === "home");
   el.trainScreen.classList.toggle("active", name === "train");
 }
+function addFloater(text, x, y, color = "#ffffff") {
+  floaters.push({ text, x, y, color, born: performance.now() });
+}
 
 // ---------- الصوت (WebAudio، بدون ملفات خارجية) ----------
 function getAudio() {
@@ -160,7 +180,7 @@ function tone(freq, dur, vol = 0.15, type = "sine") {
   o.stop(ac.currentTime + dur);
 }
 
-// ---------- تحميل نموذج الرؤية (ديناميكيًا حتى لا يتعطل التطبيق إن تعذّر CDN) ----------
+// ---------- تحميل نموذج الرؤية ----------
 async function ensureLandmarker() {
   if (landmarker) return;
   const { PoseLandmarker, FilesetResolver } = await import(MP_URL);
@@ -194,15 +214,18 @@ async function openCamera() {
     audio: false,
     video: {
       facingMode: { ideal: facingMode },
-      width: { ideal: 1280 },
-      height: { ideal: 720 },
+      // الهاتف عمودي، لذلك نطلب صورة عمودية حتى تظهر الذراعان كاملتين
+      width: { ideal: 720 },
+      height: { ideal: 1280 },
     },
   });
   const track = stream.getVideoTracks()[0];
   const reported = track?.getSettings?.().facingMode;
   mirror = (reported ?? facingMode) === "user";
 
+  // الفيديو يظهر فعلًا (وليس مخفيًا)، والـ canvas فوقه يرسم الكيس والهيكل
   el.cam.muted = true;
+  el.cam.style.transform = mirror ? "scaleX(-1)" : "none";
   el.cam.srcObject = stream;
   if (el.cam.readyState < 1) {
     await new Promise((resolve) => el.cam.addEventListener("loadedmetadata", resolve, { once: true }));
@@ -212,7 +235,6 @@ async function openCamera() {
   } catch (e) {
     console.warn(e);
   }
-  lastVideoTime = -1;
 }
 
 function stopCamera() {
@@ -293,10 +315,12 @@ function resetSession() {
   floaters = [];
   bag = createBag();
   resetHands();
+  targets = [];
+  pillars = [];
+  flashRed = 0;
   lastPose = null;
   calibReady = false;
   stableSince = 0;
-  lastVideoTime = -1;
 }
 
 function setState(s) {
@@ -305,7 +329,7 @@ function setState(s) {
   el.restOverlay.hidden = s !== "rest";
   el.pauseOverlay.hidden = s !== "paused";
   if (s === "rest") {
-    el.restNext.textContent = `الجولة ${currentRound + 0} ستبدأ بعد الراحة`;
+    el.restNext.textContent = `الجولة ${currentRound} ستبدأ بعد الراحة`;
   }
   updateHud();
 }
@@ -313,12 +337,18 @@ function setState(s) {
 function startRound() {
   roundMs = 0;
   resetHands();
+  targets = [];
+  pillars = [];
+  nextTargetAt = activeMs + 500;
+  nextPillarAt = activeMs + 4000;
   tone(660, 0.2, 0.2);
   setState("round");
 }
 
 function endRound() {
   tone(880, 0.35, 0.25);
+  targets = [];
+  pillars = [];
   if (currentRound >= totalRounds) {
     finishSession();
     return;
@@ -351,6 +381,9 @@ function finishSession() {
     jab: stats.jab,
     cross: stats.cross,
     hits: stats.hits,
+    targetHits: stats.targetHits,
+    dodges: stats.dodges,
+    pillarHits: stats.pillarHits,
     ppm: activeMs >= 5000 ? Math.round(stats.total / minutes) : 0,
   };
   if (stats.total > 0 || activeMs > 5000) saveSession(sess);
@@ -366,6 +399,8 @@ function exitTraining() {
   stopCamera();
   state = "home";
   floaters = [];
+  targets = [];
+  pillars = [];
   el.calibOverlay.hidden = true;
   el.restOverlay.hidden = true;
   el.pauseOverlay.hidden = true;
@@ -390,8 +425,7 @@ function loop(now) {
     vw = v.videoWidth;
     vh = v.videoHeight;
     updateLayout();
-    // ملاحظة: currentTime لا يتغير دائمًا في بث الكاميرا المباشر على بعض المتصفحات،
-    // لذلك نعتمد على طابع الوقت لكل إطار بدل مقارنة currentTime.
+    // نعتمد على طابع الوقت لكل إطار، لأن currentTime لا يتغير دائمًا في بث الكاميرا
     if (landmarker && now > lastDetectTs) {
       lastDetectTs = now;
       detect(now);
@@ -404,9 +438,11 @@ function loop(now) {
 }
 
 function updateState(dt) {
+  flashRed = Math.max(0, flashRed - dt / 400);
   if (state === "round") {
     roundMs += dt;
     activeMs += dt;
+    updateGame(dt);
     if (roundMs >= roundDurMs) endRound();
   } else if (state === "rest") {
     restMs -= dt;
@@ -447,9 +483,7 @@ function detect(now) {
   1) ext  : امتداد الذراع = المسافة (كتف→معصم) / عرض الكتف
   2) zF   : تقدّم المعصم نحو الكاميرا = (عمق الكتف - عمق المعصم) / عرض الكتف
   3) speed: سرعة المعصم خلال آخر WINDOW_MS (بوحدة عرض كتف/ثانية)
-  - الذراع "مسلّحة" بعد أن تعود للاسترخاء. اللكمة تُحسب عندما تتجاوز الذراع
-    عتبة الامتداد وتكون السرعة كافية، ثم تُقفل حتى تعود الذراع للاسترخاء
-    (يمنع احتساب اللكمة الواحدة عدة مرات) مع فترة تبريد إضافية.
+  - الذراع "مسلّحة" بعد أن تعود للاسترخاء، وتُقفل بعد كل لكمة (يمنع العدّ المزدوج)
 */
 function processHand(side, lm, now, canCount) {
   const H = hands[side];
@@ -504,16 +538,22 @@ function registerPunch(side, nx, ny) {
   stats[side]++;
   stats[type]++;
   if (onBag) stats.hits++;
-
   bagImpact(onBag ? 1 : 0.5, onBag);
-  floaters.push({
-    text: `${side === "left" ? "يسرى" : "يمنى"} · ${type === "jab" ? "جاب" : "كروس"}`,
-    x: p.x,
-    y: p.y,
-    born: performance.now(),
-    hit: onBag,
-  });
-  tone(onBag ? 330 : 220, 0.07, 0.12, "square");
+  addFloater(`${side === "left" ? "يسرى" : "يمنى"} · ${type === "jab" ? "جاب" : "كروس"}`,
+             p.x, p.y, onBag ? "#ff5a64" : "#ffffff");
+
+  // هل وقعت اللكمة على القفاز المقترب؟
+  const tgt = findTargetAt(p.x, p.y);
+  if (tgt) {
+    tgt.state = "hit";
+    tgt.age = 0;
+    stats.targetHits++;
+    nextTargetAt = activeMs + TARGET_GAP_MS;
+    addFloater("+1 🥊", p.x, p.y - 36, "#ffd166");
+    tone(520, 0.12, 0.2, "triangle");
+  } else {
+    tone(onBag ? 330 : 220, 0.07, 0.12, "square");
+  }
   updateHud();
 }
 
@@ -548,7 +588,7 @@ function updateCalibration(lm, sw, now) {
   el.calibBtn.disabled = !calibReady;
 }
 
-// ---------- تخطيط الفيديو على الـ canvas (cover + مرآة للكاميرا الأمامية) ----------
+// ---------- تخطيط الفيديو (contain: تظهر الصورة كاملة دون قص) ----------
 function resizeCanvas() {
   const r = el.stage.getBoundingClientRect();
   cw = r.width;
@@ -561,12 +601,12 @@ function resizeCanvas() {
 
 function updateLayout() {
   if (!vw || !vh || !cw || !ch) return;
-  scale = Math.max(cw / vw, ch / vh);
+  scale = Math.min(cw / vw, ch / vh);
   offX = (cw - vw * scale) / 2;
   offY = (ch - vh * scale) / 2;
 }
 
-// يحوّل إحداثيات الفيديو المعيارية (0..1) إلى إحداثيات الشاشة (CSS px) بعد المرآة
+// يحوّل إحداثيات الفيديو المعيارية (0..1) إلى إحداثيات الشاشة بعد المرآة
 function toScreen(nx, ny) {
   const x = mirror ? 1 - nx : nx;
   return { x: offX + x * vw * scale, y: offY + ny * vh * scale };
@@ -617,7 +657,6 @@ function capsulePath(x, y, w, h) {
 function drawBag() {
   const g = bagGeom();
 
-  // سقف التعليق
   ctx.fillStyle = "#2b2b2b";
   ctx.fillRect(g.cx - g.w * 0.8, g.ceilingY - 5, g.w * 1.6, 6);
 
@@ -625,7 +664,6 @@ function drawBag() {
   ctx.translate(g.cx, g.ceilingY);
   ctx.rotate(bag.angle);
 
-  // السلاسل
   ctx.strokeStyle = "#8d9296";
   ctx.lineWidth = 2;
   for (const s of [-1, 1]) {
@@ -635,7 +673,6 @@ function drawBag() {
     ctx.stroke();
   }
 
-  // جسم الكيس
   const x = -g.w / 2, y = g.len;
   capsulePath(x, y, g.w, g.h);
   const grad = ctx.createLinearGradient(x, 0, x + g.w, 0);
@@ -651,7 +688,6 @@ function drawBag() {
   capsulePath(x, y, g.w, g.h);
   ctx.clip();
 
-  // الخطوط الفاصلة للجلد
   ctx.strokeStyle = "rgba(0,0,0,0.55)";
   ctx.lineWidth = 2;
   for (let k = 1; k < 6; k++) {
@@ -662,21 +698,18 @@ function drawBag() {
     ctx.stroke();
   }
 
-  // لمعة خفيفة
   const hl = ctx.createRadialGradient(-g.w * 0.2, y + g.h * 0.25, 4, -g.w * 0.2, y + g.h * 0.25, g.w * 0.6);
   hl.addColorStop(0, "rgba(255,255,255,0.22)");
   hl.addColorStop(1, "rgba(255,255,255,0)");
   ctx.fillStyle = hl;
   ctx.fillRect(x, y, g.w, g.h);
 
-  // وميض عند الإصابة
   if (bag.flash > 0) {
     ctx.fillStyle = `rgba(255,70,80,${bag.flash * 0.35})`;
     ctx.fillRect(x, y, g.w, g.h);
   }
   ctx.restore();
 
-  // النص على الكيس
   ctx.save();
   ctx.translate(0, y + g.h * 0.5);
   ctx.rotate(-Math.PI / 2);
@@ -689,6 +722,177 @@ function drawBag() {
   ctx.restore();
 }
 
+// ---------- القفاز المقترب (الهدف) ----------
+// t.k من 0 (بعيد، في المنتصف عند الأفق) إلى 1 (قريب منك)
+function targetPos(t) {
+  return { x: cw / 2 + t.lane * cw * 0.3 * t.k, y: ch * (0.3 + 0.3 * t.k) };
+}
+function targetRadius(t) {
+  return Math.min(cw, ch) * (0.035 + 0.13 * Math.pow(t.k, 1.3));
+}
+function findTargetAt(x, y) {
+  for (const t of targets) {
+    if (t.state !== "live" || t.k < 0.25) continue;
+    const p = targetPos(t);
+    if (Math.hypot(x - p.x, y - p.y) <= targetRadius(t) * 1.15) return t;
+  }
+  return null;
+}
+
+function updateGame(dt) {
+  // تحديث الأهداف
+  for (const t of targets) {
+    if (t.state === "live") {
+      t.k += dt / TARGET_MS;
+      if (t.k >= 1) {
+        t.state = "miss";
+        t.age = 0;
+        stats.targetMiss++;
+        nextTargetAt = activeMs + TARGET_GAP_MS;
+      }
+    } else {
+      t.age += dt;
+    }
+  }
+  targets = targets.filter((t) => t.state === "live" || t.age < 400);
+  if (!targets.some((t) => t.state === "live") && activeMs >= nextTargetAt) {
+    targets.push({ state: "live", lane: pickLane(), k: 0, age: 0 });
+  }
+
+  // تحديث الأعمدة
+  for (const p of pillars) {
+    p.k += dt / PILLAR_MS;
+    if (!p.judged && p.k >= PILLAR_JUDGE_K) judgePillar(p);
+  }
+  const hadPillars = pillars.length > 0;
+  pillars = pillars.filter((p) => p.k < 1.1);
+  if (hadPillars && pillars.length === 0) {
+    nextPillarAt = activeMs + PILLAR_GAP_MIN + Math.random() * PILLAR_GAP_RAND;
+  }
+  if (pillars.length === 0 && activeMs >= nextPillarAt) {
+    pillars.push({ lane: pickLane(), k: 0, judged: false });
+  }
+}
+
+// ---------- الأعمدة ----------
+function pillarX(p) {
+  return cw / 2 + p.lane * cw * 0.3 * p.k;
+}
+function pillarW(p) {
+  return cw * (0.04 + 0.12 * p.k);
+}
+function bodyCenterX() {
+  const L = lastPose[11], R = lastPose[12];
+  return toScreen((L.x + R.x) / 2, (L.y + R.y) / 2).x;
+}
+function bodyHalfWidth() {
+  return Math.max(poseSW * scale * 0.6, 30);
+}
+
+// الحكم على العمود: هل كان جسمك داخل مساره لحظة وصوله؟
+function judgePillar(p) {
+  p.judged = true;
+  if (!lastPose || !poseSW) return;          // لا حكم بدون رؤية الجسم
+  const bx = bodyCenterX();
+  const px = pillarX(p);
+  const reach = pillarW(p) / 2 + bodyHalfWidth();
+  const y = ch * 0.45;
+  if (Math.abs(bx - px) < reach) {
+    stats.pillarHits++;
+    flashRed = 1;
+    addFloater("ضربة ✖", bx, y, "#ff5a64");
+    tone(120, 0.25, 0.25, "sawtooth");
+  } else {
+    stats.dodges++;
+    addFloater("تفادٍ ✓", bx, y, "#7CFC9A");
+    tone(880, 0.12, 0.15, "triangle");
+  }
+  updateHud();
+}
+
+function drawPillars() {
+  for (const p of pillars) {
+    if (p.k < 0.02) continue;
+    const x = pillarX(p), w = pillarW(p);
+    const top = ch * 0.18, bottom = ch * 0.85;
+    const a = Math.min(1, 0.3 + p.k);
+    const grad = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
+    grad.addColorStop(0, `rgba(40,40,48,${a})`);
+    grad.addColorStop(0.5, `rgba(125,130,142,${a})`);
+    grad.addColorStop(1, `rgba(40,40,48,${a})`);
+    ctx.fillStyle = grad;
+    ctx.fillRect(x - w / 2, top, w, bottom - top);
+    ctx.strokeStyle = `rgba(225,29,46,${a})`;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x - w / 2, top, w, bottom - top);
+  }
+}
+
+// رسم قفاز: كفّ مع إبهام ومعصم أبيض
+function drawGlove(x, y, r, alpha, color) {
+  if (alpha <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  ctx.fillStyle = "#e9e9e9";
+  ctx.beginPath();
+  ctx.roundRect ? ctx.roundRect(x - r * 0.55, y + r * 0.55, r * 1.1, r * 0.5, r * 0.15)
+                : ctx.rect(x - r * 0.55, y + r * 0.55, r * 1.1, r * 0.5);
+  ctx.fill();
+
+  const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
+  g.addColorStop(0, "#ff5a64");
+  g.addColorStop(1, color);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.ellipse(x, y, r * 0.75, r * 0.8, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.ellipse(x - r * 0.65, y + r * 0.1, r * 0.28, r * 0.42, -0.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(0,0,0,0.35)";
+  ctx.lineWidth = Math.max(1, r * 0.04);
+  for (let i = -1; i <= 1; i++) {
+    ctx.beginPath();
+    ctx.moveTo(x - r * 0.45, y + i * r * 0.25 - r * 0.1);
+    ctx.lineTo(x + r * 0.4, y + i * r * 0.25 - r * 0.1);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = "rgba(255,255,255,0.25)";
+  ctx.beginPath();
+  ctx.ellipse(x + r * 0.2, y - r * 0.35, r * 0.22, r * 0.12, -0.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawTargets() {
+  for (const t of targets) {
+    const p = targetPos(t);
+    const r = targetRadius(t);
+    if (t.state === "live") {
+      drawGlove(p.x, p.y, r, 1, "#8e0f1a");
+    } else {
+      const a = Math.max(0, 1 - t.age / 400);
+      if (t.state === "hit") {
+        ctx.save();
+        ctx.globalAlpha = a;
+        ctx.strokeStyle = "#ffd166";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r * (2 - a), 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+        drawGlove(p.x, p.y, r, a, "#ff2d3d");
+      } else {
+        drawGlove(p.x, p.y, r, a * 0.6, "#555");
+      }
+    }
+  }
+}
+
 // ---------- الرسم ----------
 const PAIRS = [[11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [11, 23], [12, 24], [23, 24]];
 
@@ -696,30 +900,21 @@ function render(now) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, cw, ch);
 
-  // 1) بث الكاميرا (مع المرآة عند الأمامية)
-  if (vw && el.cam.readyState >= 2) {
-    ctx.save();
-    if (mirror) {
-      ctx.translate(cw, 0);
-      ctx.scale(-1, 1);
-    }
-    ctx.drawImage(el.cam, offX, offY, vw * scale, vh * scale);
-    ctx.restore();
-  } else {
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, cw, ch);
-  }
-  ctx.fillStyle = "rgba(0,0,0,0.15)";
-  ctx.fillRect(0, 0, cw, ch);
-
-  // 2) الكيس الافتراضي
+  // الكاميرا تظهر عبر عنصر الفيديو تحت الـ canvas، فلا نرسمها هنا
   drawBag();
 
-  // 3) الهيكل العظمي والقفازات فوق الكيس
-  if (lastPose) drawSkeleton(now);
+  if (state === "round" || state === "paused" || state === "rest") {
+    drawPillars();
+    drawTargets();
+  }
 
-  // 4) النصوص العائمة
+  if (lastPose) drawSkeleton(now);
   drawFloaters(now);
+
+  if (flashRed > 0) {
+    ctx.fillStyle = `rgba(255,0,0,${flashRed * 0.3})`;
+    ctx.fillRect(0, 0, cw, ch);
+  }
 }
 
 function drawSkeleton(now) {
@@ -747,7 +942,7 @@ function drawSkeleton(now) {
     ctx.fill();
   }
 
-  // القفازات = المعصمان، وتتوهج عند اللكمة
+  // المعصمان = القفازان، ويتوهجان عند اللكمة
   const r = Math.max(14, poseSW * scale * 0.13);
   for (const side of ["left", "right"]) {
     const idx = side === "left" ? 15 : 16;
@@ -772,7 +967,7 @@ function drawFloaters(now) {
   for (const f of floaters) {
     const age = (now - f.born) / LIFE;
     ctx.globalAlpha = 1 - age;
-    ctx.fillStyle = f.hit ? "#ff5a64" : "#ffffff";
+    ctx.fillStyle = f.color;
     ctx.fillText(f.text, f.x, f.y - age * 40);
   }
   ctx.globalAlpha = 1;
@@ -788,11 +983,13 @@ function updateHud() {
   setText(el.crossCount, stats.cross);
   setText(el.hits, stats.hits);
   setText(el.ppm, ppm);
+  setText(el.targetHits, stats.targetHits);
+  setText(el.dodges, stats.dodges);
+  setText(el.pillarHits, stats.pillarHits);
 
   let remain;
   if (state === "rest") remain = restMs;
   else if (state === "calib" || state === "home") remain = roundDurMs;
-  else if (state === "done") remain = roundDurMs - roundMs;
   else remain = roundDurMs - roundMs;
   setText(el.timer, fmtTime(remain));
 
@@ -814,6 +1011,9 @@ function showResult(s) {
       <div><b>${s.ppm}</b><small>لكمة/دقيقة</small></div>
       <div><b>${fmtTime(s.durationSec * 1000)}</b><small>وقت التدريب</small></div>
       <div><b>${s.hits}</b><small>على الكيس</small></div>
+      <div><b>${s.targetHits}</b><small>أهداف القفاز</small></div>
+      <div><b>${s.dodges}</b><small>تفادٍ ناجح</small></div>
+      <div><b>${s.pillarHits}</b><small>ضربات مستلمة</small></div>
       <div><b>${s.left}</b><small>يسرى</small></div>
       <div><b>${s.right}</b><small>يمنى</small></div>
       <div><b>${s.jab}</b><small>جاب</small></div>
@@ -869,7 +1069,7 @@ function renderHistory() {
         </div>
         <div class="hist-num">
           <b>${s.total}</b> لكمة<br>
-          <small>${s.ppm}/د · ${s.hits || 0} على الكيس</small>
+          <small>${s.ppm}/د · ${s.hits || 0} على الكيس · ${s.targetHits || 0} قفاز</small>
         </div>
       </div>`).join("");
   }
