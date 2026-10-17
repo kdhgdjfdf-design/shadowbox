@@ -786,3 +786,38 @@ body.hide-stats .grid { display: none; }
 [dir="ltr"] .sheet.wide { text-align: left; }
 [dir="ltr"] .tips { padding-right: 0; padding-left: 18px; }
 [dir="ltr"] .hist-num { text-align: right; }
+
+/* ===== المدرّب الذكي ===== */
+.coach-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 82px;
+  margin: 12px 0 0;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(135deg, #5b21b6, #1e1035);
+  color: #fff;
+  font-family: inherit;
+  text-align: start;
+  cursor: pointer;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45);
+  transition: transform 0.12s ease;
+}
+.coach-card:active { transform: scale(0.98); }
+.coach-logo {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.3);
+  font-size: 30px;
+  line-height: 1;
+}
+.coach-card .mode-text b { font-size: 20px; font-weight: 900; }
+.coach-card .mode-text small { font-size: 13px; line-height: 1.5; opacity: 0.9; }

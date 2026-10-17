@@ -203,6 +203,22 @@ const T = {
   hist_summary: ["{p}/د · {g} قفاز · {d} تفادٍ", "{p}/min · {g} gloves · {d} dodges"],
   btn_clear_history: ["حذف السجل", "Delete history"],
   hist_confirm: ["هل تريد حذف كل السجل المحفوظ على هذا الجهاز؟", "Delete all saved history on this device?"],
+  coach_name: ["المدرّب الذكي", "AI Coach"],
+  coach_desc: ["تحليل جلساتك واقتراح تمارين مناسبة", "Analyzes your sessions and suggests drills"],
+  coach_title: ["المدرّب الذكي 🧠", "AI Coach 🧠"],
+  coach_empty: ["أكمل جلسة واحدة على الأقل ليبدأ المدرّب بتحليل أدائك.", "Complete at least one session so the coach can analyze your performance."],
+  coach_note: ["التحليل يتم محليًا على جهازك من أرقام الجلسات فقط، دون رفع أي صورة أو استخدام خدمة خارجية.", "Analysis runs locally on your device from session numbers only. No images are uploaded and no external service is used."],
+  coach_stat_sessions: ["جلسات محللة", "sessions analyzed"],
+  coach_stat_ppm: ["متوسط لكمات/دقيقة", "avg punches/min"],
+  coach_stat_glove: ["دقة القفاز", "glove accuracy"],
+  coach_stat_dodge: ["نسبة التفادي", "dodge rate"],
+  coach_tips_title: ["توصيات لجلستك القادمة", "Recommendations for your next session"],
+  coach_tip_speed: ["متوسط سرعتك منخفض. حافظ على إيقاع ثابت للكمات، وابدأ بجولات قصيرة بسرعة متوسطة.", "Your pace is low. Keep a steady punch rhythm and start with shorter rounds at medium speed."],
+  coach_tip_dodge: ["نسبة تفاديك للحواجز منخفضة. جرّب وضع «مراوغة» وركّز على حركة الرأس والجسم.", "Your dodge rate is low. Try Dodge mode and focus on head and body movement."],
+  coach_tip_cross: ["تستعمل الكروس قليلًا. تدرّب على تركيبات جاب-كروس متكررة لتوازن لكماتك.", "You throw few crosses. Practice repeated jab-cross combinations to balance your punches."],
+  coach_tip_sequence: ["أخطاء اليد كثيرة في التسلسل. جرّب وضع «تسلسل» ببطء لتحسين تمييز اليدين.", "Many wrong-hand errors. Try Sequence mode at slow speed to sharpen hand recognition."],
+  coach_tip_improving: ["تحسّن معدل لكماتك في آخر جلسة مقارنة بالسابقة، استمر على هذا النهج.", "Your punch rate improved in your last session. Keep it up."],
+  coach_tip_good: ["أداؤك متوازن. حافظ على الانتظام وزِد مدة الجولة تدريجيًا.", "Your performance is balanced. Stay consistent and gradually increase round length."],
   help_title: ["نصائح للحصول على أفضل دقة", "Tips for better accuracy"],
   help_1: ["ضع الهاتف على حامل ثابت على ارتفاع الصدر تقريبًا، ويفضّل أن يكون بعيدًا عنك بمترين تقريبًا.", "Put the phone on a stable stand at about chest height, roughly two meters away."],
   help_2: ["يجب أن يظهر <b>كتفاك ويداك كاملتان</b> داخل الإطار. الأرجل والوركان غير ضروريين.", "Your <b>shoulders and both hands</b> must be inside the frame. Legs and hips are not required."],
@@ -239,6 +255,7 @@ const IDS = [
   "historyModal", "historyBody", "btnClearHistory", "btnCloseHistory",
   "helpModal", "btnCloseHelp", "seqPrompt", "btnStats", "btnLabels", "sensSel", "countSel", "splash",
   "settingsModal", "langSel", "btnCloseSettings", "btnResetHistory",
+  "btnCoach", "coachModal", "coachBody", "btnCloseCoach",
 ];
 const el = {};
 for (const id of IDS) el[id] = $(id);
@@ -296,6 +313,7 @@ let floaters = [];
 let targets = [];                // أهداف القفاز: {state: live|hit|miss, lane, k, age}
 let pillars = [];                // الحواجز: {lane, k, judged}
 let nextTargetAt = 0, nextPillarAt = 0;
+let lastTargetLane = null;       // آخر عمود ظهر فيه قفاز (لتجنب التكرار)
 let flashRed = 0;                // وميض أحمر عند ضربة من حاجز
 let audioCtx = null;
 let toastTimer = 0;
@@ -319,6 +337,26 @@ function dropHandTracking() {
 }
 function pickLane() {
   return [-1, 0, 1][Math.floor(Math.random() * 3)];
+}
+// أهداف ذكية: لا تكرر العمود نفسه، وتفضّل الجهة البعيدة عن ميل جسمك لتضطر إلى الوصول إليها
+function leanSide() {
+  if (!lastPose || !poseSW || !cw) return 0;
+  if (!lastPose[11] || !lastPose[12]) return 0;
+  const dx = (bodyCenterX() - cw / 2) / (cw * 0.2);
+  return Math.abs(dx) < 0.25 ? 0 : Math.max(-1, Math.min(1, dx));
+}
+function pickTargetLane() {
+  const lean = leanSide();
+  const lanes = [-1, 0, 1].filter((l) => l !== lastTargetLane);
+  const weights = lanes.map((l) => (lean !== 0 && l * lean < 0 ? 2 : 1));
+  let r = Math.random() * weights.reduce((a, b) => a + b, 0);
+  let pick = lanes[lanes.length - 1];
+  for (let i = 0; i < lanes.length; i++) {
+    r -= weights[i];
+    if (r < 0) { pick = lanes[i]; break; }
+  }
+  lastTargetLane = pick;
+  return pick;
 }
 
 // ---------- أدوات عامة ----------
@@ -673,6 +711,8 @@ function finishSession() {
     cross: stats.cross,
     hits: stats.hits,
     targetHits: stats.targetHits,
+    targetMiss: stats.targetMiss,
+    wrongHand: stats.wrongHand,
     dodges: stats.dodges,
     pillarHits: stats.pillarHits,
     ppm: activeMs >= 5000 ? Math.round(stats.total / minutes) : 0,
@@ -944,6 +984,7 @@ function judgeTargetPunch(side, nx, ny) {
 }
 
 function applyTargetHit(tgt, p) {
+  if (tgt.state !== "live") return;   // الإصابة تُحتسب مرة واحدة فقط لكل هدف
   tgt.state = "hit";
   tgt.age = 0;
   stats.targetHits++;
@@ -1088,7 +1129,7 @@ function updateGame(dt) {
       const st = seq[seqIdx];
       targets.push({ state: "live", lane: st.lane, high: st.high, ms: st.ms, hand: st.hand, kind: st.kind, seqMode: true, judged: false, wrongCounted: false, k: 0, age: 0 });
     } else {
-      targets.push({ state: "live", lane: pickLane(), ms: Math.round(TARGET_MS * speedMul), k: 0, age: 0 });
+      targets.push({ state: "live", lane: pickTargetLane(), ms: Math.round(TARGET_MS * speedMul), k: 0, age: 0 });
     }
   }
 
@@ -1448,6 +1489,49 @@ function renderHistory() {
   el.historyBody.innerHTML = html;
 }
 
+// ---------- المدرّب الذكي: تحليل محلي لأرقام الجلسات (بدون API) ----------
+function analyzeSessions(arr) {
+  if (!arr.length) return null;
+  const sum = (key) => arr.reduce((s, x) => s + (Number(x[key]) || 0), 0);
+  const recent = arr.slice(0, 5);
+  const avgPpm = Math.round(recent.reduce((s, x) => s + (x.ppm || 0), 0) / recent.length);
+  const punches = sum("total");
+  const crosses = sum("cross");
+  const gloveAll = sum("targetHits") + sum("targetMiss");
+  const glovePct = gloveAll ? Math.round((100 * sum("targetHits")) / gloveAll) : null;
+  const dodged = sum("dodges");
+  const hitBy = sum("pillarHits");
+  const dodgePct = dodged + hitBy ? Math.round((100 * dodged) / (dodged + hitBy)) : null;
+  const wrong = sum("wrongHand");
+
+  const tips = [];
+  if (avgPpm && avgPpm < 20) tips.push(t("coach_tip_speed"));
+  if (dodgePct !== null && dodgePct < 50) tips.push(t("coach_tip_dodge"));
+  if (punches >= 20 && crosses / punches < 0.25) tips.push(t("coach_tip_cross"));
+  if (wrong >= 3) tips.push(t("coach_tip_sequence"));
+  if (arr.length >= 2 && (arr[0].ppm || 0) > (arr[1].ppm || 0)) tips.push(t("coach_tip_improving"));
+  if (!tips.length) tips.push(t("coach_tip_good"));
+  return { sessions: arr.length, avgPpm, glovePct, dodgePct, tips };
+}
+
+function renderCoach() {
+  const a = analyzeSessions(loadSessions());
+  if (!a) {
+    el.coachBody.innerHTML = `<p class="notice">${t("coach_empty")}</p><p class="notice small">${t("coach_note")}</p>`;
+    return;
+  }
+  el.coachBody.innerHTML = `
+    <div class="res-grid">
+      <div><b>${a.sessions}</b><small>${t("coach_stat_sessions")}</small></div>
+      <div><b>${a.avgPpm}</b><small>${t("coach_stat_ppm")}</small></div>
+      <div><b>${a.glovePct === null ? "—" : a.glovePct + "%"}</b><small>${t("coach_stat_glove")}</small></div>
+      <div><b>${a.dodgePct === null ? "—" : a.dodgePct + "%"}</b><small>${t("coach_stat_dodge")}</small></div>
+    </div>
+    <h3 class="section-title">${t("coach_tips_title")}</h3>
+    <ul class="tips">${a.tips.map((x) => `<li>${x}</li>`).join("")}</ul>
+    <p class="notice small">${t("coach_note")}</p>`;
+}
+
 function clearHistory() {
   if (!confirm(t("hist_confirm"))) return;
   try {
@@ -1480,6 +1564,11 @@ el.btnCloseHistory.addEventListener("click", () => (el.historyModal.hidden = tru
 el.btnClearHistory.addEventListener("click", clearHistory);
 el.btnHelp.addEventListener("click", () => (el.helpModal.hidden = false));
 el.btnCloseHelp.addEventListener("click", () => (el.helpModal.hidden = true));
+el.btnCoach.addEventListener("click", () => {
+  renderCoach();
+  el.coachModal.hidden = false;
+});
+el.btnCloseCoach.addEventListener("click", () => (el.coachModal.hidden = true));
 
 el.calibBtn.addEventListener("click", () => {
   if (calibReady) startRound();

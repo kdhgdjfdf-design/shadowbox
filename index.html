@@ -52,6 +52,12 @@
       </button>
     </div>
 
+    <button id="btnCoach" class="coach-card">
+      <span class="coach-logo">🧠</span>
+      <span class="mode-text"><b data-i18n="coach_name">المدرّب الذكي</b><small data-i18n="coach_desc"></small></span>
+      <span class="mode-arrow"></span>
+    </button>
+
     <div class="row">
       <button id="btnHistory" class="btn ghost" data-i18n="btn_history">السجل والإحصائيات</button>
       <button id="btnHelp" class="btn ghost" data-i18n="btn_help">نصائح الإعداد</button>
@@ -277,6 +283,15 @@
         <button id="btnClearHistory" class="btn ghost danger-text" data-i18n="btn_clear_history">حذف السجل</button>
         <button id="btnCloseHistory" class="btn primary" data-i18n="btn_close">إغلاق</button>
       </div>
+    </div>
+  </div>
+
+  <!-- ============ المدرّب الذكي ============ -->
+  <div id="coachModal" class="overlay modal" hidden>
+    <div class="sheet wide">
+      <h2 data-i18n="coach_title">المدرّب الذكي 🧠</h2>
+      <div id="coachBody"></div>
+      <button id="btnCloseCoach" class="btn primary big" data-i18n="btn_close">إغلاق</button>
     </div>
   </div>
 
