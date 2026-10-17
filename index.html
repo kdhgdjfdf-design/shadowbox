@@ -98,6 +98,24 @@
       <h2 class="setup-name" data-i18n="nav_learn">التعلّم</h2>
     </div>
 
+    <section class="card three-d-card">
+      <div class="three-d-heading">
+        <div><span class="eyebrow">SHADOWBOX NOX</span><h2>التعلّم بالحركة ثلاثية الأبعاد</h2></div>
+        <span class="live-dot">● حيّ</span>
+      </div>
+      <p class="three-d-subtitle">اختر الحركة وشاهد مجسّمًا ثلاثي الأبعاد يحرّك ذراعه لتوضيحها.</p>
+      <div id="boxer3dStage" class="boxer-3d-stage">
+        <div class="three-d-loading" id="boxer3dStatus">جارٍ تجهيز المجسّم ثلاثي الأبعاد…</div>
+      </div>
+      <div class="move-selector" role="group" aria-label="اختيار حركة التدريب">
+        <button type="button" class="move-select active" data-move3d="jab">جاب</button>
+        <button type="button" class="move-select" data-move3d="cross">كروس</button>
+        <button type="button" class="move-select" data-move3d="guard">حراسة</button>
+        <button type="button" class="move-select" data-move3d="dodge">مراوغة</button>
+      </div>
+      <p id="boxer3dHint" class="three-d-hint">مدّ اليد الأمامية للأمام ثم أعدها بسرعة إلى الحراسة.</p>
+    </section>
+
     <section class="card">
       <h2 data-i18n="learn_combos_t">الكومبوهات</h2>
       <ul class="tips">
@@ -385,23 +403,31 @@
     </div>
   </div>
 
-  <!-- ============ المدرّب الذكي ============ -->
-  <div id="coachModal" class="overlay modal" hidden>
-    <div class="sheet wide">
-      <h2 data-i18n="coach_title">المدرّب الذكي 🧠</h2>
-      <div id="coachBody"></div>
-      <section class="coach-chat" aria-label="AI Coach chat">
-        <h3 class="section-title" data-i18n="coach_chat_title">اسأل المدرّب الذكي</h3>
-        <div id="coachChatStatus" class="notice small" role="status" data-i18n="coach_chat_unconfigured">المحادثة تحتاج ربط الخادم المركزي أولًا. التحليل المحلي يعمل كالمعتاد.</div>
-        <div id="coachChatMessages" class="coach-chat-messages" aria-live="polite"></div>
-        <form id="coachChatForm" class="coach-chat-form">
-          <textarea id="coachChatInput" rows="2" maxlength="1000" data-i18n-placeholder="coach_chat_placeholder" placeholder="اسأل عن الكومبوهات أو الدفاع أو حركة القدمين..."></textarea>
-          <button id="coachChatSend" type="submit" class="btn primary" data-i18n="coach_chat_send">إرسال</button>
-        </form>
-        <p class="notice small" data-i18n="coach_chat_privacy">لا ترسل معلومات شخصية. تُرسل رسالتك وملخص أرقام التدريب فقط إلى الخادم عند تفعيل الخدمة؛ لا تُرسل صور الكاميرا.</p>
-      </section>
-      <button id="btnCloseCoach" class="btn primary big" data-i18n="btn_close">إغلاق</button>
-    </div>
+  <!-- ============ المدرّب الذكي: محادثة بملء الشاشة ============ -->
+  <div id="coachModal" class="overlay modal coach-fullscreen" hidden>
+    <section class="coach-app" aria-label="المدرّب الذكي">
+      <header class="coach-app-header">
+        <button id="btnCloseCoach" class="coach-back" type="button" aria-label="رجوع">‹</button>
+        <div class="coach-avatar">🧠</div>
+        <div class="coach-heading"><strong data-i18n="coach_title">المدرّب الذكي</strong><small>ShadowBox Nox · مساعد الملاكمة</small></div>
+        <span class="coach-online"><i></i> جاهز</span>
+      </header>
+      <div id="coachBody" class="coach-summary"></div>
+      <div id="coachChatStatus" class="coach-status" role="status">اسألني عن اللكمات والدفاع والكومبوهات.</div>
+      <div id="coachChatMessages" class="coach-chat-messages coach-full-messages" aria-live="polite">
+        <div class="coach-message coach-message-assistant">أهلًا بك! 🥊 أنا مدرّبك في ShadowBox Nox. اسألني عن الجاب والكروس، الكومبوهات، الدفاع أو حركة القدمين.</div>
+      </div>
+      <div class="coach-suggestions">
+        <button type="button" data-coach-prompt="اشرح لي الفرق بين الجاب والكروس">الفرق بين الجاب والكروس</button>
+        <button type="button" data-coach-prompt="أعطني كومبو للمبتدئين">كومبو للمبتدئين</button>
+        <button type="button" data-coach-prompt="كيف أحسن حركة القدمين؟">حركة القدمين</button>
+      </div>
+      <form id="coachChatForm" class="coach-chat-form coach-full-form">
+        <textarea id="coachChatInput" rows="1" maxlength="1000" data-i18n-placeholder="coach_chat_placeholder" placeholder="اكتب سؤالك هنا…" aria-label="اكتب سؤالك"></textarea>
+        <button id="coachChatSend" type="submit" class="coach-send" aria-label="إرسال السؤال">➤</button>
+      </form>
+      <p class="coach-privacy-note">لا تشارك معلومات شخصية. وضع المحادثة المحلي لا يحتاج إلى حساب.</p>
+    </section>
   </div>
 
   <!-- ============ المساعدة ============ -->
