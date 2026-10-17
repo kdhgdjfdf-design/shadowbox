@@ -915,3 +915,14 @@ body.hide-stats .grid { display: none; }
 .nav-activity { --accent1: #f97316; --accent2: #7c2d12; }
 .nav-bar .mode-text b { font-size: 20px; font-weight: 900; }
 .nav-bar .mode-text small { font-size: 13px; line-height: 1.5; opacity: 0.9; }
+
+
+/* ===== AI Coach chat ===== */
+.coach-chat { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.coach-chat-messages { display: flex; flex-direction: column; gap: 10px; max-height: 280px; overflow-y: auto; margin: 12px 0; }
+.coach-message { max-width: 92%; padding: 11px 13px; border: 1px solid var(--line); border-radius: 14px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
+.coach-message-user { align-self: flex-end; background: #2e1065; color: #fff; }
+.coach-message-assistant { align-self: flex-start; background: var(--panel-2); color: var(--text); }
+.coach-chat-form { display: flex; flex-direction: column; gap: 9px; }
+.coach-chat-form textarea { width: 100%; min-height: 58px; resize: vertical; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font: inherit; }
+.coach-chat-form button:disabled { opacity: .6; cursor: wait; }
