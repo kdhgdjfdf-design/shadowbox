@@ -973,6 +973,9 @@ body.hide-stats .grid { display: none; }
 .coach-send:disabled {opacity:.45}
 .coach-privacy-note {margin:0;padding:0 10px 4px;text-align:center;color:#777182;font-size:10px;flex-shrink:0}
 [dir="ltr"] .coach-send {transform:scaleX(-1)}
+.coach-sources {display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin-top:10px;padding-top:9px;border-top:1px solid #302d3a;font-size:12px}
+.coach-sources small {width:100%;color:#9994a7}
+.coach-sources a {color:#c9a7ff;text-decoration:underline;overflow-wrap:anywhere;max-width:100%}
 /* ===== Procedural 3D boxing avatar ===== */
 .three-d-card {overflow:hidden;background:linear-gradient(155deg,#17151e,#111014)}
 .three-d-heading {display:flex;align-items:center;justify-content:space-between;gap:10px}

@@ -1756,10 +1756,43 @@ document.querySelectorAll("[data-coach-prompt]").forEach(button => button.addEve
   el.coachChatForm.requestSubmit();
 }));
 
-function addCoachMessage(role, text) {
+// Only https links from the backend are shown; anything else is dropped.
+function cleanCoachSources(list) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const source of list) {
+    if (out.length >= 5) break;
+    if (!source || typeof source.url !== "string") continue;
+    let url;
+    try { url = new URL(source.url); } catch { continue; }
+    if (url.protocol !== "https:") continue;
+    const title = typeof source.title === "string" && source.title.trim() ? source.title.trim().slice(0, 120) : url.hostname;
+    out.push({ title, url: url.href });
+  }
+  return out;
+}
+
+function addCoachMessage(role, text, sources = []) {
   const item = document.createElement("div");
   item.className = "coach-message " + (role === "user" ? "coach-message-user" : "coach-message-assistant");
   item.textContent = text;
+  const links = cleanCoachSources(sources);
+  if (links.length) {
+    const box = document.createElement("div");
+    box.className = "coach-sources";
+    const label = document.createElement("small");
+    label.textContent = lang === "en" ? "Sources" : "المصادر";
+    box.appendChild(label);
+    for (const source of links) {
+      const anchor = document.createElement("a");
+      anchor.href = source.url;
+      anchor.target = "_blank";
+      anchor.rel = "noopener noreferrer";
+      anchor.textContent = source.title;
+      box.appendChild(anchor);
+    }
+    item.appendChild(box);
+  }
   el.coachChatMessages.appendChild(item);
   el.coachChatMessages.scrollTop = el.coachChatMessages.scrollHeight;
 }
@@ -1800,7 +1833,7 @@ el.coachChatForm.addEventListener("submit", async (event) => {
     if (!response.ok) throw new Error("HTTP " + response.status);
     const data = await response.json();
     if (!data || typeof data.reply !== "string" || !data.reply.trim()) throw new Error("Invalid response");
-    addCoachMessage("assistant", data.reply.trim());
+    addCoachMessage("assistant", data.reply.trim(), data.sources);
     el.coachChatStatus.textContent = "";
   } catch (error) {
     el.coachChatStatus.textContent = t("coach_chat_error");
