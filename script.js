@@ -868,9 +868,9 @@ function processHand(side, lm, now, canCount) {
   if (retracted || now - H.lastJudge > CFG.REARM_MS) H.armed = true;
 
   if (canCount && mode === "sequence") {
-    // في التسلسل: يكفي أن تصل الذراع الممدودة إلى الهدف، ولكل امتداد حكم واحد فقط
-    // الهدف لا يُحتسب إلا بلكمة حقيقية (سرعة كافية)، فلا تُحتسب لمسة بطيئة أو يد ثابتة
-    if (extended && H.armed && speed >= speedMinNow * 0.8 && judgeSequenceHit(side, W.x, W.y)) { H.armed = false; H.lastJudge = now; }
+    // في التسلسل: أي لمسة للقفاز بذراع ممدودة تُحتسب مرة واحدة لكل هدف (judged يمنع التكرار)
+    // نُبقي حدًا أدنى للسرعة حتى لا تُحتسب اليد الثابتة التي تمر فوق القفاز
+    if (extended && speed >= speedMinNow * 0.5 && judgeSequenceHit(side, W.x, W.y)) H.lastJudge = now;
   } else if (canCount && countTargetsOnly) {
     // الحرّ مع احتساب الأهداف فقط: لا تُحتسب اللكمة إلا إذا وصلت إلى هدف حي
     if (extended && H.armed && speed >= speedMinNow * 0.8 && judgeTargetPunch(side, W.x, W.y)) { H.armed = false; H.lastJudge = now; }
