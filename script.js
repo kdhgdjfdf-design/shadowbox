@@ -14,6 +14,8 @@ const MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
 const STORAGE_KEY = "shadowbox_sessions_v1";
 const PREFS_KEY = "shadowbox_prefs_v1";
+// Set this to the deployed Cloudflare Worker URL after backend setup. Never put API secrets here.
+const COACH_API_URL = "";
 
 // ---------- ثوابت الكشف عن اللكمات (قابلة للضبط) ----------
 const CFG = {
@@ -207,6 +209,13 @@ const T = {
   res_avg_hit: ["متوسط وقت الإصابة", "Avg time to hit"],
   res_rounds: ["جولات مكتملة", "Rounds completed"],
   coach_tip_accuracy: ["دقتك في لمس الأهداف منخفضة. ركّز على لمس القفاز بقبضتك قبل زيادة السرعة.", "Your target accuracy is low. Focus on landing the glove with your fist before increasing speed."],
+  coach_chat_title: ["اسأل المدرّب الذكي", "Ask the AI Coach"],
+  coach_chat_unconfigured: ["المحادثة تحتاج ربط الخادم المركزي أولًا. التحليل المحلي يعمل كالمعتاد.", "Chat needs the central backend URL configured first. Local analysis still works."],
+  coach_chat_placeholder: ["اسأل عن الكومبوهات أو الدفاع أو حركة القدمين...", "Ask about combos, defense, or footwork..."],
+  coach_chat_send: ["إرسال", "Send"],
+  coach_chat_thinking: ["المدرّب يفكّر...", "Coach is thinking..."],
+  coach_chat_error: ["تعذّر الاتصال بالمدرّب. تحقّق من إعداد الخادم واتصال الإنترنت.", "Could not reach the coach. Check backend setup and your internet connection."],
+  coach_chat_privacy: ["لا ترسل معلومات شخصية. عند تفعيل الخدمة تُرسل رسالتك وملخص أرقام التدريب فقط؛ لا تُرسل صور الكاميرا.", "Do not send personal information. When enabled, only your message and a numeric training summary are sent; camera images are never sent."],
   hist_sessions: ["جلسة", "sessions"],
   hist_punches: ["لكمة إجمالًا", "total punches"],
   hist_minutes: ["دقيقة تدريب", "training minutes"],
@@ -292,7 +301,7 @@ const IDS = [
   "historyModal", "historyBody", "btnClearHistory", "btnCloseHistory",
   "helpModal", "btnCloseHelp", "seqPrompt", "btnStats", "btnLabels", "sensSel", "countSel", "splash",
   "settingsModal", "langSel", "btnCloseSettings", "btnResetHistory",
-  "btnCoach", "coachModal", "coachBody", "btnCloseCoach",
+  "btnCoach", "coachModal", "coachBody", "btnCloseCoach", "coachChatStatus", "coachChatMessages", "coachChatForm", "coachChatInput", "coachChatSend",
   "btnTraining", "btnLearn", "trainMenuScreen", "learnScreen", "btnTrainBack", "btnLearnBack",
 ];
 const el = {};
@@ -362,7 +371,7 @@ function freshStats() {
            punchHit: 0, punchMiss: 0, missJab: 0, missCross: 0, hitJab: 0, hitCross: 0, reactSum: 0, reactN: 0, roundsDone: 0 };
 }
 function freshHand() {
-  return { armed: true, hist: [], lastPunch: -1e9, lastJudge: -1e9, contactUntil: 0, ep: freshEpisode() };
+  return { armed: true, hist: [], lastPunch: -1e9, lastJudge: -1e9, lastFistScreen: null, lastExt: null, lastZF: null, ep: freshEpisode() };
 }
 function freshEpisode() {
   return { active: false, start: 0, hit: false, targeted: false, type: "" };
@@ -487,6 +496,7 @@ function applyLang() {
   document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
   document.querySelectorAll("[data-i18n]").forEach((n) => { n.textContent = t(n.dataset.i18n); });
   document.querySelectorAll("[data-i18n-html]").forEach((n) => { n.innerHTML = t(n.dataset.i18nHtml); });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((n) => { n.placeholder = t(n.dataset.i18nPlaceholder); });
   el.langSel.value = lang;
   setSetupMode();
   setStatsHidden(statsHidden);
@@ -896,6 +906,9 @@ function processHand(side, lm, now, canCount) {
       poseSW < 2) {
     H.armed = true;
     H.hist = [];
+    H.lastFistScreen = null;
+    H.lastExt = null;
+    H.lastZF = null;
     return;
   }
 
@@ -915,12 +928,6 @@ function processHand(side, lm, now, canCount) {
     speed = Math.hypot(wx - o.x, wy - o.y, (zF - o.zF) * sw) / sw / dt;
   }
 
-  // بعد الضربة نتابع المعصم نصف ثانية، فإن لامس قفازًا مقتربًا تُحتسب الإصابة
-  if (canCount && now < H.contactUntil) {
-    const sp = toScreen(fist.x, fist.y);
-    if (tryTargetHit(side, sp)) H.contactUntil = 0;
-  }
-
   const extended = ext > extOnNow || zF > CFG.Z_ON;
   const retracted = ext < CFG.EXT_OFF && zF < CFG.Z_OFF;
   if (retracted || now - H.lastJudge > CFG.REARM_MS) H.armed = true;
@@ -928,16 +935,16 @@ function processHand(side, lm, now, canCount) {
   if (canCount && mode === "sequence") {
     // في التسلسل: أي لمسة للقفاز بذراع ممدودة تُحتسب مرة واحدة لكل هدف (judged يمنع التكرار)
     // نُبقي حدًا أدنى للسرعة حتى لا تُحتسب اليد الثابتة التي تمر فوق القفاز
-    if (extended && speed >= speedMinNow * 0.5 && judgeSequenceHit(side, fist.x, fist.y)) H.lastJudge = now;
+    if (extended && speed >= speedMinNow * 0.5 && judgeSequenceHit(side, fist.x, fist.y, ext, zF)) H.lastJudge = now;
   } else if (canCount && countTargetsOnly) {
     // الحرّ مع احتساب الأهداف فقط: لا تُحتسب اللكمة إلا إذا وصلت إلى هدف حي
-    if (extended && H.armed && speed >= speedMinNow * 0.8 && judgeTargetPunch(side, fist.x, fist.y)) { H.armed = false; H.lastJudge = now; }
+    if (extended && H.armed && speed >= speedMinNow * 0.8 && judgeTargetPunch(side, fist.x, fist.y, ext, zF)) { H.armed = false; H.lastJudge = now; }
   } else if (canCount && extended && speed >= speedMinNow) {
     if (H.armed && now - H.lastPunch >= CFG.COOLDOWN_MS) {
       H.armed = false;
       H.lastPunch = now;
       H.lastJudge = now;
-      registerPunch(side, fist.x, fist.y, now);
+      registerPunch(side, fist.x, fist.y, now, ext, zF);
     }
   }
 
@@ -970,13 +977,18 @@ function processHand(side, lm, now, canCount) {
                type: side === lead ? "jab" : "cross" };
     }
   }
+
+  // احفظ موضع القبضة في هذا الإطار حتى لا تُحتسب ملامسة الهدف أثناء رجوع اليد.
+  H.lastFistScreen = toScreen(fist.x, fist.y);
+  H.lastExt = ext;
+  H.lastZF = zF;
 }
 
 function handName(side) {
   return side === "left" ? t("hand_left") : t("hand_right");
 }
 
-function registerPunch(side, nx, ny, now) {
+function registerPunch(side, nx, ny, now, ext, zF) {
   // اليد الأمامية = الجاب، والخلفية = الكروس
   const lead = stance === "orthodox" ? "left" : "right";
   const type = side === lead ? "jab" : "cross";
@@ -987,9 +999,8 @@ function registerPunch(side, nx, ny, now) {
   stats[type]++;
   addFloater(`${handName(side)} · ${type === "jab" ? t("kind_jab") : t("kind_cross")}`, p.x, p.y, "#ffffff", "punch");
 
-  // نافذة تتبع قصيرة بعد الضربة (انظر processHand)
-  hands[side].contactUntil = now + 500;
-  if (!tryTargetHit(side, p)) tone(220, 0.07, 0.12, "square");
+  // لا نحتسب الإصابة إلا إذا اقتربت القبضة من الهدف أثناء حركة التمدد للأمام.
+  if (!tryTargetHit(side, p, ext, zF)) tone(220, 0.07, 0.12, "square");
   updateHud();
 }
 
@@ -1021,8 +1032,8 @@ function advanceSeq() {
 }
 
 // يحاول احتساب الضربة على الهدف؛ يعيد true إن كانت الضربة قد استُهلكت على هدف
-function tryTargetHit(side, p) {
-  const tgt = findTargetAt(p.x, p.y);
+function tryTargetHit(side, p, ext, zF) {
+  const tgt = findForwardTargetAt(side, p.x, p.y, ext, zF);
   if (!tgt) return false;
   if (tgt.seqMode && tgt.hand !== side) {
     stats.wrongHand++;
@@ -1035,9 +1046,9 @@ function tryTargetHit(side, p) {
 }
 
 // كل هدف يُحكم عليه مرة واحدة: اليد الصحيحة تحتسب إصابة، واليد الخاطئة تُسجَّل خطأً مرة واحدة فقط
-function judgeSequenceHit(side, nx, ny) {
+function judgeSequenceHit(side, nx, ny, ext, zF) {
   const p = toScreen(nx, ny);
-  const tgt = findTargetAt(p.x, p.y);
+  const tgt = findForwardTargetAt(side, p.x, p.y, ext, zF);
   if (!tgt || tgt.judged) return false;
   if (tgt.hand === side) {
     tgt.judged = true;
@@ -1059,9 +1070,9 @@ function judgeSequenceHit(side, nx, ny) {
 }
 
 // الوضع الحر مع احتساب الأهداف فقط: تُحتسب اللكمة إذا لامست هدفًا حيًا
-function judgeTargetPunch(side, nx, ny) {
+function judgeTargetPunch(side, nx, ny, ext, zF) {
   const p = toScreen(nx, ny);
-  const tgt = findTargetAt(p.x, p.y);
+  const tgt = findForwardTargetAt(side, p.x, p.y, ext, zF);
   if (!tgt || tgt.judged) return false;
   tgt.judged = true;
   const lead = stance === "orthodox" ? "left" : "right";
@@ -1188,11 +1199,21 @@ function targetPos(t) {
 function targetRadius(t) {
   return Math.min(cw, ch) * (0.035 + 0.13 * Math.pow(t.k, 1.3));
 }
-function findTargetAt(x, y) {
+function findForwardTargetAt(side, x, y, ext, zF) {
+  const H = hands[side];
+  const previous = H?.lastFistScreen;
+  // يلزم وجود موضع سابق، واقتراب واضح من مركز الهدف، مع استمرار تمدد الذراع/تقدمها.
+  if (!previous || H.lastExt == null || H.lastZF == null) return null;
+  const movingForward = ext > H.lastExt + 0.002 || zF > H.lastZF + 0.002;
+  if (!movingForward) return null;
+
   for (const t of targets) {
     if (t.state !== "live" || t.k < 0.12) continue;
-    const p = targetPos(t);
-    if (Math.hypot(x - p.x, y - p.y) <= targetRadius(t) * 1.3) return t;
+    const center = targetPos(t);
+    const nowDistance = Math.hypot(x - center.x, y - center.y);
+    const previousDistance = Math.hypot(previous.x - center.x, previous.y - center.y);
+    // نطاق إصابة أدق من السابق، مع اشتراط أن القبضة تقترب من الهدف لا تبتعد عنه.
+    if (nowDistance <= targetRadius(t) * 1.15 && nowDistance < previousDistance - 0.5) return t;
   }
   return null;
 }
@@ -1727,8 +1748,59 @@ el.btnCloseHelp.addEventListener("click", () => (el.helpModal.hidden = true));
 el.btnCoach.addEventListener("click", () => {
   renderCoach();
   el.coachModal.hidden = false;
+  if (!COACH_API_URL) el.coachChatStatus.textContent = t("coach_chat_unconfigured");
 });
 el.btnCloseCoach.addEventListener("click", () => (el.coachModal.hidden = true));
+
+function addCoachMessage(role, text) {
+  const item = document.createElement("div");
+  item.className = "coach-message " + (role === "user" ? "coach-message-user" : "coach-message-assistant");
+  item.textContent = text;
+  el.coachChatMessages.appendChild(item);
+  el.coachChatMessages.scrollTop = el.coachChatMessages.scrollHeight;
+}
+
+el.coachChatForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const message = el.coachChatInput.value.trim();
+  if (!message) return;
+  if (!COACH_API_URL) {
+    el.coachChatStatus.textContent = t("coach_chat_unconfigured");
+    return;
+  }
+  if (message.length > 1000) return;
+  addCoachMessage("user", message);
+  el.coachChatInput.value = "";
+  el.coachChatSend.disabled = true;
+  el.coachChatStatus.textContent = t("coach_chat_thinking");
+  const analysis = analyzeSessions(loadSessions());
+  try {
+    const response = await fetch(COACH_API_URL.replace(/\/$/, "") + "/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message,
+        language: lang,
+        stats: analysis ? {
+          sessions: analysis.sessions,
+          avgPpm: analysis.avgPpm,
+          glovePct: analysis.glovePct,
+          dodgePct: analysis.dodgePct
+        } : null
+      })
+    });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const data = await response.json();
+    if (!data || typeof data.reply !== "string" || !data.reply.trim()) throw new Error("Invalid response");
+    addCoachMessage("assistant", data.reply.trim());
+    el.coachChatStatus.textContent = "";
+  } catch (error) {
+    el.coachChatStatus.textContent = t("coach_chat_error");
+  } finally {
+    el.coachChatSend.disabled = false;
+    el.coachChatInput.focus();
+  }
+});
 
 // الأقسام الأربعة في الرئيسية
 el.btnTraining.addEventListener("click", () => showScreen("trainMenu"));

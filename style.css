@@ -915,3 +915,36 @@ body.hide-stats .grid { display: none; }
 .nav-activity { --accent1: #f97316; --accent2: #7c2d12; }
 .nav-bar .mode-text b { font-size: 20px; font-weight: 900; }
 .nav-bar .mode-text small { font-size: 13px; line-height: 1.5; opacity: 0.9; }
+
+
+/* ===== AI Coach chat ===== */
+.coach-chat { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.coach-chat-messages { display: flex; flex-direction: column; gap: 10px; max-height: 280px; overflow-y: auto; margin: 12px 0; }
+.coach-message { max-width: 92%; padding: 11px 13px; border: 1px solid var(--line); border-radius: 14px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
+.coach-message-user { align-self: flex-end; background: #2e1065; color: #fff; }
+.coach-message-assistant { align-self: flex-start; background: var(--panel-2); color: var(--text); }
+.coach-chat-form { display: flex; flex-direction: column; gap: 9px; }
+.coach-chat-form textarea { width: 100%; min-height: 58px; resize: vertical; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font: inherit; }
+.coach-chat-form button:disabled { opacity: .6; cursor: wait; }
+
+
+/* ===== Animated beginner boxing demos ===== */
+.move-demo{margin-top:14px;padding:12px;border:1px solid #303030;border-radius:14px;background:radial-gradient(circle at 50% 20%,#251014,#101010 75%);text-align:center}
+.move-demo-title{margin:0 0 8px;color:#ffd6d6;font-size:14px;font-weight:800}
+.boxer-demo{display:block;width:min(100%,260px);height:auto;margin:0 auto}
+.demo-head{fill:#e7b48e;stroke:#f5d0b5;stroke-width:2}
+.demo-limb,.demo-arm{fill:none;stroke:#d9d9e0;stroke-width:8;stroke-linecap:round;stroke-linejoin:round}
+.demo-arm{stroke:#ff6b75;stroke-width:7}
+.demo-glove{fill:#e11d2e;stroke:#ff9aa2;stroke-width:2}
+.demo-floor{stroke:#555;stroke-width:2;stroke-linecap:round}
+.demo-arrow{fill:none;stroke:#ffd166;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:4 5}
+.demo-jab-arm{transform-origin:120px 58px;animation:demo-jab 2.2s ease-in-out infinite}
+.demo-cross-arm{transform-origin:120px 58px;animation:demo-cross 2.2s ease-in-out infinite}
+.demo-footwork .demo-legs{animation:demo-step 2.4s ease-in-out infinite}
+.demo-dodge .demo-head{transform-box:fill-box;transform-origin:center;animation:demo-weave 2.2s ease-in-out infinite}
+.move-demo small{display:block;color:#bdbdc5;font-size:12px;line-height:1.7;margin-top:5px}
+@keyframes demo-jab{0%,15%,100%{transform:translate(0,0)}35%,48%{transform:translate(-18px,-3px)}65%{transform:translate(0,0)}}
+@keyframes demo-cross{0%,48%,100%{transform:translate(0,0)}65%,78%{transform:translate(18px,-9px)}90%{transform:translate(0,0)}}
+@keyframes demo-step{0%,100%{transform:translateX(0)}35%,60%{transform:translateX(9px)}80%{transform:translateX(-4px)}}
+@keyframes demo-weave{0%,100%{transform:translateX(0) translateY(0)}35%,55%{transform:translateX(-12px) translateY(7px)}75%{transform:translateX(10px) translateY(3px)}}
+@media(prefers-reduced-motion:reduce){.demo-jab-arm,.demo-cross-arm,.demo-footwork .demo-legs,.demo-dodge .demo-head{animation:none}}
