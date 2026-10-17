@@ -1955,7 +1955,7 @@ async function initBoxer3D() {
     avatar.scale.setScalar(2.55 / modelHeight);
     const scaledBounds = new THREE.Box3().setFromObject(avatar);
     avatar.position.y = -1.3 - scaledBounds.min.y;
-    avatar.rotation.y = Math.PI;
+    avatar.rotation.y = 0;
     scene.add(avatar);
 
     const findBone = (...parts) => {
@@ -2027,16 +2027,13 @@ async function initBoxer3D() {
     const animate = () => {
       if (!boxer3d) return;
       boxer3dFrame = requestAnimationFrame(animate);
-      const t = boxer3d.clock.getElapsedTime();
+      const delta = boxer3d.clock.getDelta();
+      const t = boxer3d.clock.elapsedTime;
       const phase = (t % 1.55) / 1.55;
       const punch = phase < 0.48 ? Math.sin((phase / 0.48) * Math.PI) : 0;
 
-      boxer3d.mixer.update(Math.min(0.04, boxer3d.clock.getDelta()));
+      boxer3d.mixer.update(Math.min(0.04, delta));
       const b = boxer3d;
-      const resetBone = (bone) => {
-        if (bone && b.baseRotations.has(bone)) bone.rotation.copy(b.baseRotations.get(bone));
-      };
-      [b.leftArm, b.rightArm, b.leftForeArm, b.rightForeArm, b.spine, b.hips].forEach(resetBone);
 
       // Subtle boxing guard, then the selected movement. The full rig remains skinned.
       if (b.leftArm) b.leftArm.rotation.x -= boxer3dMove === "guard" ? 0.7 : 0.38;
@@ -2047,13 +2044,13 @@ async function initBoxer3D() {
       if (boxer3dMove === "jab" && b.leftArm) {
         b.leftArm.rotation.x -= 0.72 * punch;
         if (b.leftForeArm) b.leftForeArm.rotation.x -= 0.18 * punch;
-        b.avatar.rotation.y = Math.PI - 0.08 - 0.12 * punch;
+        b.avatar.rotation.y = -0.08 - 0.12 * punch;
       } else if (boxer3dMove === "cross" && b.rightArm) {
         b.rightArm.rotation.x -= 0.78 * punch;
         if (b.rightForeArm) b.rightForeArm.rotation.x -= 0.16 * punch;
-        b.avatar.rotation.y = Math.PI + 0.08 + 0.14 * punch;
+        b.avatar.rotation.y = 0.08 + 0.14 * punch;
       } else if (boxer3dMove === "guard") {
-        b.avatar.rotation.y = Math.PI - 0.08;
+        b.avatar.rotation.y = -0.08;
       } else if (boxer3dMove === "dodge") {
         b.avatar.position.x = Math.sin(t * 2.5) * 0.16;
         b.avatar.rotation.z = Math.sin(t * 2.5) * 0.055;
@@ -2063,7 +2060,7 @@ async function initBoxer3D() {
         b.avatar.position.x = 0;
         b.avatar.rotation.z = 0;
       }
-      if (boxer3dMove !== "jab" && boxer3dMove !== "cross") b.avatar.rotation.y = Math.PI - 0.08;
+      if (boxer3dMove !== "jab" && boxer3dMove !== "cross") b.avatar.rotation.y = -0.08;
       renderer.render(scene, camera);
     };
     animate();
