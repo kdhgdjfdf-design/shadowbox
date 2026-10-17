@@ -19,7 +19,7 @@
     <p class="splash-hint" data-i18n="splash_hint">اضغط للدخول</p>
   </div>
 
-  <!-- ============ الشاشة الرئيسية: اختيار نوع التدريب ============ -->
+  <!-- ============ الشاشة الرئيسية: أربعة أقسام ============ -->
   <main id="homeScreen" class="screen active">
     <div class="topbar">
       <button id="btnSettings" class="chip" data-i18n="btn_settings">⚙️ الإعدادات</button>
@@ -32,6 +32,44 @@
     </header>
 
     <div id="banner" class="banner" hidden data-i18n-html="banner_https"></div>
+
+    <nav class="nav-list">
+      <button id="btnTraining" class="nav-bar nav-train">
+        <span class="mode-logo">🥊</span>
+        <span class="mode-text"><b data-i18n="nav_training">التمرين</b><small data-i18n="nav_training_desc"></small></span>
+        <span class="mode-arrow"></span>
+      </button>
+      <button id="btnLearn" class="nav-bar nav-learn">
+        <span class="mode-logo">🎓</span>
+        <span class="mode-text"><b data-i18n="nav_learn">التعلّم</b><small data-i18n="nav_learn_desc"></small></span>
+        <span class="mode-arrow"></span>
+      </button>
+      <button id="btnCoach" class="nav-bar nav-coach">
+        <span class="mode-logo">🧠</span>
+        <span class="mode-text"><b data-i18n="coach_name">المدرّب الذكي</b><small data-i18n="nav_coach_desc"></small></span>
+        <span class="mode-arrow"></span>
+      </button>
+      <button id="btnHistory" class="nav-bar nav-activity">
+        <span class="mode-logo">📊</span>
+        <span class="mode-text"><b data-i18n="nav_activity">سجل النشاط</b><small data-i18n="nav_activity_desc"></small></span>
+        <span class="mode-arrow"></span>
+      </button>
+    </nav>
+
+    <div class="row">
+      <button id="btnHelp" class="btn ghost" data-i18n="btn_help">نصائح الإعداد</button>
+    </div>
+
+    <div class="notice" data-i18n-html="notice_privacy"></div>
+    <div class="notice small" data-i18n="notice_accuracy"></div>
+  </main>
+
+  <!-- ============ قسم التمرين: أنواع التدريب ============ -->
+  <main id="trainMenuScreen" class="screen">
+    <div class="setup-head">
+      <button id="btnTrainBack" class="chip" data-i18n="btn_back">رجوع</button>
+      <h2 class="setup-name" data-i18n="nav_training">التمرين</h2>
+    </div>
 
     <h2 class="section-title" data-i18n="modes_title">اختر نوع التدريب</h2>
     <div class="mode-cards">
@@ -51,20 +89,40 @@
         <span class="mode-arrow"></span>
       </button>
     </div>
+  </main>
 
-    <button id="btnCoach" class="coach-card">
-      <span class="coach-logo">🧠</span>
-      <span class="mode-text"><b data-i18n="coach_name">المدرّب الذكي</b><small data-i18n="coach_desc"></small></span>
-      <span class="mode-arrow"></span>
-    </button>
-
-    <div class="row">
-      <button id="btnHistory" class="btn ghost" data-i18n="btn_history">السجل والإحصائيات</button>
-      <button id="btnHelp" class="btn ghost" data-i18n="btn_help">نصائح الإعداد</button>
+  <!-- ============ قسم التعلّم ============ -->
+  <main id="learnScreen" class="screen">
+    <div class="setup-head">
+      <button id="btnLearnBack" class="chip" data-i18n="btn_back">رجوع</button>
+      <h2 class="setup-name" data-i18n="nav_learn">التعلّم</h2>
     </div>
 
-    <div class="notice" data-i18n-html="notice_privacy"></div>
-    <div class="notice small" data-i18n="notice_accuracy"></div>
+    <section class="card">
+      <h2 data-i18n="learn_combos_t">الكومبوهات</h2>
+      <ul class="tips">
+        <li data-i18n="learn_combos_1"></li>
+        <li data-i18n="learn_combos_2"></li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2 data-i18n="learn_feet_t">حركة القدمين</h2>
+      <ul class="tips">
+        <li data-i18n="learn_feet_1"></li>
+        <li data-i18n="learn_feet_2"></li>
+      </ul>
+    </section>
+
+    <section class="card">
+      <h2 data-i18n="learn_def_t">الدفاع</h2>
+      <ul class="tips">
+        <li data-i18n="learn_def_1"></li>
+        <li data-i18n="learn_def_2"></li>
+      </ul>
+    </section>
+
+    <p class="notice small" data-i18n="learn_note"></p>
   </main>
 
   <!-- ============ شاشة إعدادات الجلسة ============ -->

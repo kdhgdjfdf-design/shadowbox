@@ -223,6 +223,23 @@ const T = {
   pb_legend_hit: ["ناجح", "Success"],
   pb_legend_miss: ["خطأ", "Miss"],
   pb_overall: ["نسبة الدقة الإجمالية", "Overall accuracy"],
+  nav_training: ["التمرين", "Training"],
+  nav_training_desc: ["الحر والتسلسل والمراوغة", "Free, sequence and dodge"],
+  nav_learn: ["التعلّم", "Learn"],
+  nav_learn_desc: ["الكومبوهات وحركة القدمين والدفاع", "Combos, footwork and defense"],
+  nav_coach_desc: ["تحليل محلي لجلساتك واقتراح تمارين", "Local analysis of your sessions and suggested drills"],
+  nav_activity: ["سجل النشاط", "Activity log"],
+  nav_activity_desc: ["السجل والإحصائيات وتقدمك الشخصي", "History, stats and your progress"],
+  learn_combos_t: ["الكومبوهات", "Combos"],
+  learn_combos_1: ["ابدأ بجاب ثم كروس، ثم أضف خطافًا أماميًا. كرّر الكومبو ببطء قبل زيادة السرعة.", "Start with a jab, then a cross, then add a lead hook. Repeat slowly before increasing speed."],
+  learn_combos_2: ["حافظ على إيقاع ثابت في الكومبو، ولا تبالغ في القوة على حساب التوازن.", "Keep a steady rhythm in combos. Don't overpower at the cost of balance."],
+  learn_feet_t: ["حركة القدمين", "Footwork"],
+  learn_feet_1: ["ابقَ على رؤوس أصابعك، وانقل وزنك بين القدمين بخفة.", "Stay on the balls of your feet and shift weight lightly between them."],
+  learn_feet_2: ["لا تُباعد قدميك كثيرًا، فتفقد التوازن والسرعة.", "Don't spread your feet too far, or you lose balance and speed."],
+  learn_def_t: ["الدفاع", "Defense"],
+  learn_def_1: ["أبقِ قبضتيك قرب وجهك دائمًا، وذقنك مائلًا قليلًا للأسفل.", "Keep your fists near your face at all times, with your chin slightly down."],
+  learn_def_2: ["تفادَ بتحريك الرأس والجسم، لا بالتراجع وحده.", "Slip by moving your head and body, not by stepping back alone."],
+  learn_note: ["هذه نصائح عامة للمبتدئين، وليست تحليلًا لحركتك.", "These are general beginner tips, not an analysis of your movement."],
   coach_name: ["المدرّب الذكي", "AI Coach"],
   coach_desc: ["تحليل جلساتك واقتراح تمارين مناسبة", "Analyzes your sessions and suggests drills"],
   coach_title: ["المدرّب الذكي 🧠", "AI Coach 🧠"],
@@ -276,6 +293,7 @@ const IDS = [
   "helpModal", "btnCloseHelp", "seqPrompt", "btnStats", "btnLabels", "sensSel", "countSel", "splash",
   "settingsModal", "langSel", "btnCloseSettings", "btnResetHistory",
   "btnCoach", "coachModal", "coachBody", "btnCloseCoach",
+  "btnTraining", "btnLearn", "trainMenuScreen", "learnScreen", "btnTrainBack", "btnLearnBack",
 ];
 const el = {};
 for (const id of IDS) el[id] = $(id);
@@ -410,8 +428,11 @@ function showToast(text) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => (el.toast.hidden = true), 2200);
 }
+// الشاشات: home (الرئيسية) | trainMenu (التمرين) | learn (التعلّم) | setup (إعدادات الجلسة) | train (التدريب)
 function showScreen(name) {
   el.homeScreen.classList.toggle("active", name === "home");
+  el.trainMenuScreen.classList.toggle("active", name === "trainMenu");
+  el.learnScreen.classList.toggle("active", name === "learn");
   el.setupScreen.classList.toggle("active", name === "setup");
   el.trainScreen.classList.toggle("active", name === "train");
 }
@@ -760,7 +781,7 @@ function finishSession() {
   showResult(sess);
 }
 
-function exitTraining() {
+function exitTraining(target = "trainMenu") {
   cancelAnimationFrame(rafId);
   stopCamera();
   state = "home";
@@ -771,7 +792,7 @@ function exitTraining() {
   el.restOverlay.hidden = true;
   el.pauseOverlay.hidden = true;
   el.resultOverlay.hidden = true;
-  showScreen("home");
+  showScreen(target);
 }
 
 // ---------- حلقة الرسم والكشف ----------
@@ -1675,7 +1696,7 @@ function clearHistory() {
 document.querySelectorAll(".mode-card").forEach((card) => {
   card.addEventListener("click", () => openSetup(card.dataset.mode));
 });
-el.btnSetupBack.addEventListener("click", () => showScreen("home"));
+el.btnSetupBack.addEventListener("click", () => showScreen("trainMenu"));
 el.btnStart.addEventListener("click", startSession);
 
 el.btnSettings.addEventListener("click", () => (el.settingsModal.hidden = false));
@@ -1700,6 +1721,12 @@ el.btnCoach.addEventListener("click", () => {
   el.coachModal.hidden = false;
 });
 el.btnCloseCoach.addEventListener("click", () => (el.coachModal.hidden = true));
+
+// الأقسام الأربعة في الرئيسية
+el.btnTraining.addEventListener("click", () => showScreen("trainMenu"));
+el.btnLearn.addEventListener("click", () => showScreen("learn"));
+el.btnTrainBack.addEventListener("click", () => showScreen("home"));
+el.btnLearnBack.addEventListener("click", () => showScreen("home"));
 
 el.calibBtn.addEventListener("click", () => {
   if (calibReady) startRound();
@@ -1729,7 +1756,7 @@ el.btnAgain.addEventListener("click", async () => {
   exitTraining();
   await startSession();
 });
-el.btnHome.addEventListener("click", exitTraining);
+el.btnHome.addEventListener("click", () => exitTraining("home"));
 
 // شاشة الدخول: الضغط عليها يفعّل الصوت ويشغّل نغمة الدخول
 el.splash.addEventListener("click", () => {

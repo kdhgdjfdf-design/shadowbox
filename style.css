@@ -41,6 +41,8 @@ body {
 }
 
 #homeScreen.active,
+#trainMenuScreen.active,
+#learnScreen.active,
 #setupScreen.active {
   max-width: 520px;
   margin: 0 auto;
@@ -879,3 +881,37 @@ body.hide-stats .grid { display: none; }
 .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-inline-end: 5px; vertical-align: middle; }
 .sw.hit { background: #ff2d3d; }
 .sw.miss { background: #4a4a4a; }
+
+/* ===== الأقسام الأربعة في الرئيسية ===== */
+.nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 8px 0 16px;
+}
+.nav-bar {
+  --accent1: #ff2d3d;
+  --accent2: #7f0b14;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 92px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(135deg, var(--accent1), var(--accent2));
+  color: #fff;
+  font-family: inherit;
+  text-align: start;
+  cursor: pointer;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45);
+  transition: transform 0.12s ease;
+}
+.nav-bar:active { transform: scale(0.98); }
+.nav-train { --accent1: #ff2d3d; --accent2: #7f0b14; }
+.nav-learn { --accent1: #3b82f6; --accent2: #1e3a8a; }
+.nav-coach { --accent1: #8b5cf6; --accent2: #2e1065; }
+.nav-activity { --accent1: #f97316; --accent2: #7c2d12; }
+.nav-bar .mode-text b { font-size: 20px; font-weight: 900; }
+.nav-bar .mode-text small { font-size: 13px; line-height: 1.5; opacity: 0.9; }
