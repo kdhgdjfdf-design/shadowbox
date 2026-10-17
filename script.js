@@ -14,8 +14,8 @@ const MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
 const STORAGE_KEY = "shadowbox_sessions_v1";
 const PREFS_KEY = "shadowbox_prefs_v1";
-// Set this to the deployed Cloudflare Worker URL after backend setup. Never put API secrets here.
-const COACH_API_URL = "";
+// This is the existing Worker URL used by the project. Deploy worker/ai-coach.js to this Worker first.
+const COACH_API_URL = "https://shadowbox-coach.kdhgdjfdf.workers.dev";
 
 // ---------- ثوابت الكشف عن اللكمات (قابلة للضبط) ----------
 const CFG = {
@@ -1756,10 +1756,46 @@ document.querySelectorAll("[data-coach-prompt]").forEach(button => button.addEve
   el.coachChatForm.requestSubmit();
 }));
 
-function addCoachMessage(role, text) {
+function cleanCoachSources(list) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const source of list) {
+    if (out.length >= 5) break;
+    if (!source || typeof source.url !== "string") continue;
+    let url;
+    try { url = new URL(source.url); } catch { continue; }
+    if (url.protocol !== "https:" || seen.has(url.href)) continue;
+    seen.add(url.href);
+    const title = typeof source.title === "string" && source.title.trim()
+      ? source.title.trim().slice(0, 120)
+      : url.hostname;
+    out.push({ title, url: url.href });
+  }
+  return out;
+}
+
+function addCoachMessage(role, text, sources = []) {
   const item = document.createElement("div");
   item.className = "coach-message " + (role === "user" ? "coach-message-user" : "coach-message-assistant");
   item.textContent = text;
+  const links = role === "assistant" ? cleanCoachSources(sources) : [];
+  if (links.length) {
+    const box = document.createElement("div");
+    box.className = "coach-sources";
+    const label = document.createElement("small");
+    label.textContent = lang === "en" ? "Sources" : "المصادر";
+    box.appendChild(label);
+    for (const source of links) {
+      const anchor = document.createElement("a");
+      anchor.href = source.url;
+      anchor.target = "_blank";
+      anchor.rel = "noopener noreferrer";
+      anchor.textContent = source.title;
+      box.appendChild(anchor);
+    }
+    item.appendChild(box);
+  }
   el.coachChatMessages.appendChild(item);
   el.coachChatMessages.scrollTop = el.coachChatMessages.scrollHeight;
 }
