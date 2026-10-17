@@ -38,6 +38,9 @@ const PILLAR_MS = 3000;        // زمن اقتراب الحاجز (السرعة
 const PILLAR_JUDGE_K = 0.92;   // لحظة الحكم على الحاجز (قرب الكاميرا)
 const PILLAR_GAP_MIN = 4000;   // أقل فاصل بين حاجزين (مللي ثانية)
 const PILLAR_GAP_RAND = 3000;  // زيادة عشوائية على الفاصل
+const DODGE_GAP_MIN = 800;     // وضع المراوغة: فاصل أقصر بين الحواجز (حاجز واحد في كل مرة)
+const DODGE_GAP_RAND = 1200;
+let lastPillarHigh = null;     // آخر حاجز: true = للرأس، false = للجسم
 const SEQ_LEN = 4;
 const SEQ_BASE_MS = 1600;      // زمن الخطوة في التسلسل عند السرعة المتوسطة (ثابت لكل الخطوات في الجلسة)
 const SPEED_MUL = { slow: 1.35, mid: 1, fast: 0.75 };  // مضاعِف زمن الاقتراب حسب اختيار السرعة
@@ -668,7 +671,7 @@ function startRound() {
   seq = [];
   seqIdx = 0;
   nextTargetAt = activeMs + 500;
-  nextPillarAt = activeMs + 4000;
+  nextPillarAt = activeMs + (mode === "dodge" ? 2000 : 4000);
   tone(660, 0.2, 0.2);
   setState("round");
 }
@@ -1141,15 +1144,25 @@ function updateGame(dt) {
   }
   const hadPillars = pillars.length > 0;
   pillars = pillars.filter((p) => p.k < 1.1);
+  // حاجز واحد في كل مرة: التالي يبدأ بعد مرور الحالي، والفاصل يتبع سرعة الجلسة المختارة
   if (hadPillars && pillars.length === 0) {
-    nextPillarAt = activeMs + PILLAR_GAP_MIN + Math.random() * PILLAR_GAP_RAND;
+    const gap = mode === "dodge"
+      ? DODGE_GAP_MIN + Math.random() * DODGE_GAP_RAND
+      : PILLAR_GAP_MIN + Math.random() * PILLAR_GAP_RAND;
+    nextPillarAt = activeMs + gap * speedMul;
   }
   if (pillars.length === 0 && activeMs >= nextPillarAt && !targets.some((t) => t.state === "live")) {
-    pillars.push({ lane: pickLane(), k: 0, judged: false });
+    pillars.push({ lane: pickLane(), high: pickPillarHeight(), k: 0, judged: false });
   }
 }
 
 // ---------- الحواجز ----------
+// كل حاجز يتجه إما إلى الرأس أو إلى الجسم، بالتناوب
+function pickPillarHeight() {
+  const high = lastPillarHigh === null ? Math.random() < 0.5 : !lastPillarHigh;
+  lastPillarHigh = high;
+  return high;
+}
 function pillarX(p) {
   return cw / 2 + p.lane * cw * 0.3 * p.k;
 }
@@ -1173,10 +1186,10 @@ function bodyHalfWidth() {
 function judgePillar(p) {
   p.judged = true;
   if (!lastPose || !poseSW) return;          // لا حكم بدون رؤية الجسم
-  const bx = headCenterX();
+  const bx = p.high ? headCenterX() : bodyCenterX();   // الحاجز للرأس يُحكم على الرأس، والآخر على الجسم
   const px = pillarX(p);
   const reach = pillarW(p) / 2 + bodyHalfWidth();
-  const y = ch * 0.45;
+  const y = p.high ? ch * 0.22 : ch * 0.55;
   if (Math.abs(bx - px) < reach) {
     stats.pillarHits++;
     flashRed = 1;
@@ -1196,8 +1209,9 @@ function drawPillars() {
     if (p.k < 0.02) continue;
     const x = pillarX(p), w = pillarW(p);
     const h = ch * (0.12 + 0.3 * p.k);
-    const cy = ch * 0.3;
+    const cy = p.high ? ch * 0.22 : ch * 0.55;   // مستوى الرأس أو الجسم
     const a = Math.min(1, 0.3 + p.k);
+    const edge = p.high ? "225,29,46" : "255,190,60"; // أحمر للرأس، ذهبي للجسم
     ctx.save();
     ctx.translate(x, cy);
     ctx.rotate(-p.lane * 0.35);          // ميلان يتجه نحو منتصف الشاشة (الرأس)
@@ -1207,7 +1221,7 @@ function drawPillars() {
     grad.addColorStop(1, `rgba(40,40,48,${a})`);
     ctx.fillStyle = grad;
     ctx.fillRect(-w / 2, -h / 2, w, h);
-    ctx.strokeStyle = `rgba(225,29,46,${a})`;
+    ctx.strokeStyle = `rgba(${edge},${a})`;
     ctx.lineWidth = 2;
     ctx.strokeRect(-w / 2, -h / 2, w, h);
     ctx.restore();
