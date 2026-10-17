@@ -926,6 +926,9 @@ body.hide-stats .grid { display: none; }
 .coach-chat-form { display: flex; flex-direction: column; gap: 9px; }
 .coach-chat-form textarea { width: 100%; min-height: 58px; resize: vertical; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font: inherit; }
 .coach-chat-form button:disabled { opacity: .6; cursor: wait; }
+.coach-sources { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--line); }
+.coach-sources small { width: 100%; color: var(--muted); font-size: 11px; }
+.coach-sources a { display: inline-block; max-width: 100%; padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; color: var(--accent1, #a78bfa); font-size: 12px; text-decoration: underline; overflow-wrap: anywhere; }
 
 
 /* ===== Animated beginner boxing demos ===== */
