@@ -371,7 +371,7 @@ function freshStats() {
            punchHit: 0, punchMiss: 0, missJab: 0, missCross: 0, hitJab: 0, hitCross: 0, reactSum: 0, reactN: 0, roundsDone: 0 };
 }
 function freshHand() {
-  return { armed: true, hist: [], lastPunch: -1e9, lastJudge: -1e9, contactUntil: 0, ep: freshEpisode() };
+  return { armed: true, hist: [], lastPunch: -1e9, lastJudge: -1e9, lastFistScreen: null, lastExt: null, lastZF: null, ep: freshEpisode() };
 }
 function freshEpisode() {
   return { active: false, start: 0, hit: false, targeted: false, type: "" };
@@ -925,12 +925,6 @@ function processHand(side, lm, now, canCount) {
     speed = Math.hypot(wx - o.x, wy - o.y, (zF - o.zF) * sw) / sw / dt;
   }
 
-  // بعد الضربة نتابع المعصم نصف ثانية، فإن لامس قفازًا مقتربًا تُحتسب الإصابة
-  if (canCount && now < H.contactUntil) {
-    const sp = toScreen(fist.x, fist.y);
-    if (tryTargetHit(side, sp)) H.contactUntil = 0;
-  }
-
   const extended = ext > extOnNow || zF > CFG.Z_ON;
   const retracted = ext < CFG.EXT_OFF && zF < CFG.Z_OFF;
   if (retracted || now - H.lastJudge > CFG.REARM_MS) H.armed = true;
@@ -938,16 +932,16 @@ function processHand(side, lm, now, canCount) {
   if (canCount && mode === "sequence") {
     // في التسلسل: أي لمسة للقفاز بذراع ممدودة تُحتسب مرة واحدة لكل هدف (judged يمنع التكرار)
     // نُبقي حدًا أدنى للسرعة حتى لا تُحتسب اليد الثابتة التي تمر فوق القفاز
-    if (extended && speed >= speedMinNow * 0.5 && judgeSequenceHit(side, fist.x, fist.y)) H.lastJudge = now;
+    if (extended && speed >= speedMinNow * 0.5 && judgeSequenceHit(side, fist.x, fist.y, ext, zF)) H.lastJudge = now;
   } else if (canCount && countTargetsOnly) {
     // الحرّ مع احتساب الأهداف فقط: لا تُحتسب اللكمة إلا إذا وصلت إلى هدف حي
-    if (extended && H.armed && speed >= speedMinNow * 0.8 && judgeTargetPunch(side, fist.x, fist.y)) { H.armed = false; H.lastJudge = now; }
+    if (extended && H.armed && speed >= speedMinNow * 0.8 && judgeTargetPunch(side, fist.x, fist.y, ext, zF)) { H.armed = false; H.lastJudge = now; }
   } else if (canCount && extended && speed >= speedMinNow) {
     if (H.armed && now - H.lastPunch >= CFG.COOLDOWN_MS) {
       H.armed = false;
       H.lastPunch = now;
       H.lastJudge = now;
-      registerPunch(side, fist.x, fist.y, now);
+      registerPunch(side, fist.x, fist.y, now, ext, zF);
     }
   }
 
@@ -980,13 +974,18 @@ function processHand(side, lm, now, canCount) {
                type: side === lead ? "jab" : "cross" };
     }
   }
+
+  // احفظ موضع القبضة في هذا الإطار حتى لا تُحتسب ملامسة الهدف أثناء رجوع اليد.
+  H.lastFistScreen = toScreen(fist.x, fist.y);
+  H.lastExt = ext;
+  H.lastZF = zF;
 }
 
 function handName(side) {
   return side === "left" ? t("hand_left") : t("hand_right");
 }
 
-function registerPunch(side, nx, ny, now) {
+function registerPunch(side, nx, ny, now, ext, zF) {
   // اليد الأمامية = الجاب، والخلفية = الكروس
   const lead = stance === "orthodox" ? "left" : "right";
   const type = side === lead ? "jab" : "cross";
@@ -997,9 +996,8 @@ function registerPunch(side, nx, ny, now) {
   stats[type]++;
   addFloater(`${handName(side)} · ${type === "jab" ? t("kind_jab") : t("kind_cross")}`, p.x, p.y, "#ffffff", "punch");
 
-  // نافذة تتبع قصيرة بعد الضربة (انظر processHand)
-  hands[side].contactUntil = now + 500;
-  if (!tryTargetHit(side, p)) tone(220, 0.07, 0.12, "square");
+  // لا نحتسب الإصابة إلا إذا اقتربت القبضة من الهدف أثناء حركة التمدد للأمام.
+  if (!tryTargetHit(side, p, ext, zF)) tone(220, 0.07, 0.12, "square");
   updateHud();
 }
 
@@ -1031,8 +1029,8 @@ function advanceSeq() {
 }
 
 // يحاول احتساب الضربة على الهدف؛ يعيد true إن كانت الضربة قد استُهلكت على هدف
-function tryTargetHit(side, p) {
-  const tgt = findTargetAt(p.x, p.y);
+function tryTargetHit(side, p, ext, zF) {
+  const tgt = findForwardTargetAt(side, p.x, p.y, ext, zF);
   if (!tgt) return false;
   if (tgt.seqMode && tgt.hand !== side) {
     stats.wrongHand++;
@@ -1045,9 +1043,9 @@ function tryTargetHit(side, p) {
 }
 
 // كل هدف يُحكم عليه مرة واحدة: اليد الصحيحة تحتسب إصابة، واليد الخاطئة تُسجَّل خطأً مرة واحدة فقط
-function judgeSequenceHit(side, nx, ny) {
+function judgeSequenceHit(side, nx, ny, ext, zF) {
   const p = toScreen(nx, ny);
-  const tgt = findTargetAt(p.x, p.y);
+  const tgt = findForwardTargetAt(side, p.x, p.y, ext, zF);
   if (!tgt || tgt.judged) return false;
   if (tgt.hand === side) {
     tgt.judged = true;
@@ -1069,9 +1067,9 @@ function judgeSequenceHit(side, nx, ny) {
 }
 
 // الوضع الحر مع احتساب الأهداف فقط: تُحتسب اللكمة إذا لامست هدفًا حيًا
-function judgeTargetPunch(side, nx, ny) {
+function judgeTargetPunch(side, nx, ny, ext, zF) {
   const p = toScreen(nx, ny);
-  const tgt = findTargetAt(p.x, p.y);
+  const tgt = findForwardTargetAt(side, p.x, p.y, ext, zF);
   if (!tgt || tgt.judged) return false;
   tgt.judged = true;
   const lead = stance === "orthodox" ? "left" : "right";
@@ -1198,11 +1196,21 @@ function targetPos(t) {
 function targetRadius(t) {
   return Math.min(cw, ch) * (0.035 + 0.13 * Math.pow(t.k, 1.3));
 }
-function findTargetAt(x, y) {
+function findForwardTargetAt(side, x, y, ext, zF) {
+  const H = hands[side];
+  const previous = H?.lastFistScreen;
+  // يلزم وجود موضع سابق، واقتراب واضح من مركز الهدف، مع استمرار تمدد الذراع/تقدمها.
+  if (!previous || H.lastExt == null || H.lastZF == null) return null;
+  const movingForward = ext > H.lastExt + 0.002 || zF > H.lastZF + 0.002;
+  if (!movingForward) return null;
+
   for (const t of targets) {
     if (t.state !== "live" || t.k < 0.12) continue;
-    const p = targetPos(t);
-    if (Math.hypot(x - p.x, y - p.y) <= targetRadius(t) * 1.3) return t;
+    const center = targetPos(t);
+    const nowDistance = Math.hypot(x - center.x, y - center.y);
+    const previousDistance = Math.hypot(previous.x - center.x, previous.y - center.y);
+    // نطاق إصابة أدق من السابق، مع اشتراط أن القبضة تقترب من الهدف لا تبتعد عنه.
+    if (nowDistance <= targetRadius(t) * 1.15 && nowDistance < previousDistance - 0.5) return t;
   }
   return null;
 }
