@@ -1,10 +1,9 @@
 /* =====================================================================
-   ShadowBox Nox — منطق التطبيق (المرحلة 2)
+   ShadowBox AI — منطق التطبيق (الإصدار 2)
    - كشف الجسم عبر MediaPipe Pose Landmarker (داخل المتصفح، بدون رفع صور)
    - عدّ اللكمات من حركة المعصم والذراع، لا من زر
    - أهداف على شكل قفاز تقترب منك، وتظهر واحدة جديدة بعد كل ضربة
-   - حواجز تتجه نحو رأسك، عليك التفادي بالحركة
-   - عربي / English، وحفظ الإعدادات محليًا
+   - أعمدة تقترب منك، عليك التحرك يمينًا أو يسارًا لتفاديها
    ===================================================================== */
 
 // ---------- روابط الموارد ----------
@@ -13,232 +12,45 @@ const WASM_URL = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/w
 const MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
 const STORAGE_KEY = "shadowbox_sessions_v1";
-const PREFS_KEY = "shadowbox_prefs_v1";
 
 // ---------- ثوابت الكشف عن اللكمات (قابلة للضبط) ----------
 const CFG = {
-  EXT_ON: 1.15,       // امتداد الذراع (بوحدة عرض الكتف) لاعتبارها ممدودة
-  EXT_OFF: 1.05,      // أقل من هذا تُعتبر الذراع مسترخية
-  Z_ON: 0.35,         // تقدّم المعصم نحو الكاميرا لاعتبار اللكمة أمامية
-  Z_OFF: 0.25,        // أقل من هذا يُعتبر المعصم عائدًا
-  SPEED_MIN: 2.2,     // أقل سرعة للمعصم (عرض كتف لكل ثانية)
-  COOLDOWN_MS: 250,   // فترة صمت بين لكمتين من نفس اليد لمنع العدّ المزدوج
-  REARM_MS: 350,      // بعد حكم على لكمة تُعاد تهيئة الذراع بعد هذه المدة حتى لو لم تعد للاسترخاء كليًا
-  WINDOW_MS: 160,     // نافذة قياس السرعة
-  VIS_MIN: 0.5,       // أقل درجة ظهور للمفصل
-  SW_MIN: 0.10,       // أقل عرض كتف (نسبة لعرض الفيديو) للمعايرة
-  SW_MAX: 0.6,        // أكبر عرض كتف مسموح (سُمح بالوقوف أقرب إلى الهاتف)
-  READY_HOLD_MS: 3000,
+  EXT_ON: 1.3,       // امتداد الذراع (بوحدة عرض الكتف) لاعتبارها ممدودة
+  EXT_OFF: 1.05,     // أقل من هذا تُعتبر الذراع مسترخية
+  Z_ON: 0.45,        // تقدّم المعصم نحو الكاميرا لاعتبار اللكمة أمامية
+  Z_OFF: 0.25,       // أقل من هذا يُعتبر المعصم عائدًا
+  SPEED_MIN: 3.5,    // أقل سرعة للمعصم (عرض كتف لكل ثانية)
+  COOLDOWN_MS: 380,  // فترة صمت بين لكمتين لمنع العدّ المزدوج
+  WINDOW_MS: 160,    // نافذة قياس السرعة
+  VIS_MIN: 0.5,      // أقل درجة ظهور للمفصل
+  SW_MIN: 0.10,      // أقل عرض كتف (نسبة لعرض الفيديو) للمعايرة
+  SW_MAX: 0.45,      // أكبر عرض كتف مسموح
+  READY_HOLD_MS: 1000,
 };
 
 // ---------- إعدادات الأهداف والأعمدة ----------
-const TARGET_MS = 2200;        // زمن اقتراب القفاز من البعيد إلى القريب (السرعة المتوسطة)
+const TARGET_MS = 2200;        // زمن اقتراب القفاز من البعيد إلى القريب
 const TARGET_GAP_MS = 700;     // انتظار قصير قبل ظهور القفاز التالي
-const PILLAR_MS = 3000;        // زمن اقتراب الحاجز (السرعة المتوسطة)
-const PILLAR_JUDGE_K = 0.92;   // لحظة الحكم على الحاجز (قرب الكاميرا)
-const PILLAR_GAP_MIN = 4000;   // أقل فاصل بين حاجزين (مللي ثانية)
+const PILLAR_MS = 3000;        // زمن اقتراب العمود
+const PILLAR_JUDGE_K = 0.92;   // لحظة الحكم على العمود (قرب الكاميرا)
+const PILLAR_GAP_MIN = 4000;   // أقل فاصل بين عمودين (مللي ثانية)
 const PILLAR_GAP_RAND = 3000;  // زيادة عشوائية على الفاصل
-const SEQ_LEN = 4;
-const SEQ_BASE_MS = 1600;      // زمن الخطوة في التسلسل عند السرعة المتوسطة (ثابت لكل الخطوات في الجلسة)
-const SPEED_MUL = { slow: 1.35, mid: 1, fast: 0.75 };  // مضاعِف زمن الاقتراب حسب اختيار السرعة
-// حساسية الكشف: قيم حد السرعة وحد الامتداد (الأعلى = يتطلب لكمة أقوى)
-const SENS = { low: { speed: 3.0, ext: 1.25 }, mid: { speed: 2.2, ext: 1.15 }, high: { speed: 1.7, ext: 1.05 } };
-const MODE_LOGO = { free: "🥊", sequence: "🎯", dodge: "🛡️" };
-
-// ---------- النصوص: [عربي، English] ----------
-const T = {
-  splash_hint: ["اضغط للدخول", "Tap to enter"],
-  tagline: ["كيس افتراضي يستجيب للكماتك، وعدّاد لكمات يعمل بكاميرا هاتفك", "A virtual bag that reacts to your punches, with a punch counter powered by your phone camera"],
-  btn_settings: ["⚙️ الإعدادات", "⚙️ Settings"],
-  banner_https: ["⚠️ الكاميرا لا تعمل إلا عبر <b>HTTPS</b>. افتح التطبيق من رابط يبدأ بـ https:// أو من localhost.", "⚠️ The camera only works over <b>HTTPS</b>. Open the app from an https:// link or localhost."],
-  modes_title: ["اختر نوع التدريب", "Choose a training mode"],
-  name_free: ["حرّ", "Free"],
-  desc_free: ["أهداف عشوائية تقترب منك، اضرب كل واحد منها", "Random targets come toward you. Hit each one"],
-  name_sequence: ["تسلسل", "Sequence"],
-  desc_sequence: ["اتبع الكومبو: نوع الضربة واليد والمكان والسرعة", "Follow the combo: punch type, hand, zone and speed"],
-  name_dodge: ["مراوغة", "Dodge"],
-  desc_dodge: ["حواجز تتجه نحو رأسك، تفاداها بالحركة (بدون لكمات)", "Barriers aim at your head. Slip them by moving (no punches)"],
-  btn_history: ["السجل والإحصائيات", "History & stats"],
-  btn_help: ["نصائح الإعداد", "Setup tips"],
-  notice_privacy: ["🔒 <b>الخصوصية:</b> معالجة الفيديو تتم داخل متصفحك فقط. لا يتم رفع أي صورة من الكاميرا إلى أي خادم. السجل يُحفظ محليًا على جهازك.", "🔒 <b>Privacy:</b> video is processed only inside your browser. No camera image is uploaded to any server. History is saved locally on your device."],
-  notice_accuracy: ["ℹ️ كشف اللكمات تقديري من كاميرا واحدة، وقد يخطئ مع الحركات السريعة جدًا أو الإضاءة الضعيفة. راجع «نصائح الإعداد» للحصول على أفضل دقة.", "ℹ️ Punch detection is an estimate from one camera and may miss very fast moves or poor lighting. See “Setup tips” for best accuracy."],
-  setup_title: ["إعدادات الجلسة", "Session settings"],
-  btn_back: ["رجوع", "Back"],
-  btn_start: ["ابدأ التدريب", "Start training"],
-  btn_preparing: ["جارٍ تجهيز الكاميرا...", "Preparing camera..."],
-  field_round_len: ["مدة الجولة", "Round length"],
-  field_rounds: ["عدد الجولات", "Number of rounds"],
-  field_rest: ["الراحة بين الجولات", "Rest between rounds"],
-  field_speed: ["سرعة الأهداف", "Target speed"],
-  field_stance: ["وضعية الوقوف", "Stance"],
-  field_camera: ["الكاميرا", "Camera"],
-  dur_1: ["دقيقة واحدة", "1 minute"],
-  dur_2: ["دقيقتان", "2 minutes"],
-  dur_3: ["3 دقائق", "3 minutes"],
-  rounds_1: ["جولة واحدة", "1 round"],
-  rounds_2: ["جولتان", "2 rounds"],
-  rounds_3: ["3 جولات", "3 rounds"],
-  rounds_4: ["4 جولات", "4 rounds"],
-  rounds_6: ["6 جولات", "6 rounds"],
-  lbl_show: ["إظهار التوضيح", "Show hints"],
-  lbl_hide: ["إخفاء التوضيح", "Hide hints"],
-  field_sens: ["حساسية الكشف", "Detection sensitivity"],
-  sens_low: ["منخفضة (تتطلب لكمة قوية)", "Low (needs strong punches)"],
-  sens_mid: ["متوسطة", "Medium"],
-  sens_high: ["عالية (تقبل لكمات أخف)", "High (accepts lighter punches)"],
-  field_count: ["احتساب اللكمات", "Count punches"],
-  count_targets: ["على الأهداف فقط", "Only on targets"],
-  count_all: ["كل لكمة في الهواء أيضًا", "Every punch, including air"],
-  rounds_12: ["12 جولة", "12 rounds"],
-  rest_0: ["بدون راحة", "No rest"],
-  rest_30: ["30 ثانية", "30 seconds"],
-  rest_60: ["دقيقة", "1 minute"],
-  rest_90: ["دقيقة ونصف", "1.5 minutes"],
-  speed_slow: ["بطيء", "Slow"],
-  speed_mid: ["متوسط", "Medium"],
-  speed_fast: ["سريع", "Fast"],
-  stance_orth: ["اليد اليسرى أمامية (عادية)", "Left hand forward (orthodox)"],
-  stance_south: ["اليد اليمنى أمامية (معاكسة)", "Right hand forward (southpaw)"],
-  cam_front: ["الأمامية (مفضّلة للتدريب)", "Front (recommended)"],
-  cam_back: ["الخلفية", "Back"],
-  settings_title: ["الإعدادات", "Settings"],
-  field_lang: ["اللغة", "Language"],
-  toggle_sound: ["تفعيل الأصوات والتأثيرات الصوتية", "Sound effects"],
-  btn_reset_history: ["حذف السجل المحفوظ", "Clear saved history"],
-  btn_close: ["إغلاق", "Close"],
-  btn_ok: ["حسنًا", "OK"],
-  status_calib: ["معايرة", "Calibration"],
-  status_round: ["تسجيل نشط", "Recording"],
-  status_rest: ["راحة", "Rest"],
-  status_paused: ["متوقف", "Paused"],
-  status_done: ["انتهى", "Finished"],
-  round_label: ["الجولة {n}/{m}", "Round {n}/{m}"],
-  unit_punch: ["لكمة", "punches"],
-  stat_jab: ["جاب", "Jab"],
-  stat_right: ["يمنى", "Right"],
-  stat_left: ["يسرى", "Left"],
-  stat_targets: ["أهداف القفاز", "Glove targets"],
-  stat_ppm: ["لكمة/دقيقة", "Punches/min"],
-  stat_cross: ["كروس", "Cross"],
-  stat_hits: ["ضربات مستلمة", "Hits taken"],
-  stat_dodges: ["تفادٍ ناجح", "Successful dodges"],
-  btn_hide_stats: ["إخفاء النتائج", "Hide stats"],
-  btn_show_stats: ["إظهار النتائج", "Show stats"],
-  ctrl_left: ["يسار أمامي", "Left lead"],
-  ctrl_right: ["يمين أمامي", "Right lead"],
-  btn_rotate: ["⟳ تدوير", "⟳ Rotate"],
-  btn_cam: ["🔄 كاميرا", "🔄 Camera"],
-  btn_end: ["إنهاء", "End"],
-  calib_title: ["معايرة الوضعية", "Pose calibration"],
-  calib_hint: ["قف على بعد مناسب بحيث يظهر جسمك من الكتفين حتى اليدين، واجعل الإضاءة من أمامك.", "Stand at a distance where your body shows from shoulders to hands, with light in front of you."],
-  calib_searching: ["جارٍ البحث عن جسمك...", "Looking for your body..."],
-  calib_none: ["لم يتم اكتشاف جسمك بعد. تأكد من الإضاءة وأن الكاميرا تظهر جسمك.", "Your body isn't detected yet. Check the lighting and that the camera can see you."],
-  calib_show: ["أظهر كتفيك ويديك كاملتين داخل الإطار", "Show both shoulders and hands fully in the frame"],
-  calib_closer: ["اقترب قليلًا من الكاميرا", "Move a little closer to the camera"],
-  calib_back: ["ابتعد قليلًا عن الكاميرا", "Move a little back from the camera"],
-  calib_ok: ["ممتاز! جسمك واضح داخل الإطار", "Great! Your body is clearly in the frame"],
-  countdown: ["استعد... {n}", "Get ready... {n}"],
-  btn_start_round: ["ابدأ الجولة", "Start round"],
-  rest_title: ["راحة", "Rest"],
-  rest_next: ["الجولة {n} ستبدأ بعد الراحة", "Round {n} starts after the rest"],
-  btn_skip_rest: ["ابدأ الجولة الآن", "Start round now"],
-  pause_title: ["متوقف مؤقتًا", "Paused"],
-  pause_hint: ["لن تُحتسب اللكمات أثناء الإيقاف.", "Punches are not counted while paused."],
-  btn_resume: ["متابعة", "Resume"],
-  res_title: ["نتيجة الجلسة 🥊", "Session result 🥊"],
-  btn_again: ["جلسة جديدة", "New session"],
-  btn_home: ["الرئيسية", "Home"],
-  res_total: ["إجمالي اللكمات", "Total punches"],
-  res_ppm: ["لكمة/دقيقة", "Punches/min"],
-  res_time: ["وقت التدريب", "Training time"],
-  res_targets: ["أهداف القفاز", "Glove targets"],
-  res_dodges: ["تفادٍ ناجح", "Successful dodges"],
-  res_hits: ["ضربات مستلمة", "Hits taken"],
-  res_combos: ["تسلسلات مكتملة", "Combos completed"],
-  res_wrong: ["يد خاطئة", "Wrong hand"],
-  res_left: ["يسرى", "Left"],
-  res_right: ["يمنى", "Right"],
-  res_jab: ["جاب", "Jab"],
-  res_cross: ["كروس", "Cross"],
-  res_none: ["لم تُسجَّل أي لكمة. تأكد من ظهور كتفيك ويديك، ثم حاول مرة أخرى.", "No punches recorded. Make sure your shoulders and hands are visible, then try again."],
-  res_note: ["العدّاد تقديري ويعتمد على كاميرا واحدة. تم حفظ الجلسة محليًا.", "The counter is an estimate based on one camera. The session was saved locally."],
-  kind_jab: ["جاب", "Jab"],
-  kind_cross: ["كروس", "Cross"],
-  hand_left: ["يسرى", "Left"],
-  hand_right: ["يمنى", "Right"],
-  fl_wrong: ["يد خاطئة ✖", "Wrong hand ✖"],
-  fl_hit: ["ضربة ✖", "Hit ✖"],
-  fl_dodge: ["تفادٍ ✓", "Dodged ✓"],
-  fl_target: ["+1 🥊", "+1 🥊"],
-  toast_front: ["الكاميرا الأمامية", "Front camera"],
-  toast_back: ["الكاميرا الخلفية", "Back camera"],
-  toast_cam_fail: ["تعذر تبديل الكاميرا", "Could not switch camera"],
-  toast_rot: ["التدوير: {d}°", "Rotation: {d}°"],
-  toast_left_lead: ["اليد اليسرى أمامية", "Left hand leads"],
-  toast_right_lead: ["اليد اليمنى أمامية", "Right hand leads"],
-  seq_prep: ["جارٍ التحضير...", "Preparing..."],
-  seq_line: ["{i}/{n} · {kind} {hand} · {zone} · {speed}", "{i}/{n} · {kind} {hand} · {zone} · {speed}"],
-  pos_high: ["أعلى", "Upper"],
-  pos_low: ["أسفل", "Lower"],
-  pos_left: ["يسار", "left"],
-  pos_center: ["وسط", "center"],
-  pos_right: ["يمين", "right"],
-  spd_fast: ["سريع", "Fast"],
-  spd_mid: ["متوسط", "Medium"],
-  spd_slow: ["بطيء", "Slow"],
-  err_https: ["يجب فتح التطبيق عبر HTTPS (أو localhost) لتعمل الكاميرا.", "The app must be opened over HTTPS (or localhost) for the camera to work."],
-  err_no_api: ["هذا المتصفح لا يدعم الوصول إلى الكاميرا.", "This browser doesn't support camera access."],
-  err_perm: ["تم رفض إذن الكاميرا. فعّله من إعدادات المتصفح ثم أعد المحاولة.", "Camera permission was denied. Enable it in browser settings and try again."],
-  err_notfound: ["لم يتم العثور على كاميرا في هذا الجهاز.", "No camera was found on this device."],
-  err_busy: ["الكاميرا مستخدمة من تطبيق آخر. أغلقه ثم أعد المحاولة.", "The camera is in use by another app. Close it and try again."],
-  err_generic: ["تعذر تشغيل التطبيق: {msg}. تأكد من اتصال الإنترنت (لتحميل نموذج الرؤية) ومن فتح الصفحة عبر HTTPS.", "Couldn't start the app: {msg}. Check your internet connection (to load the pose model) and that the page is opened over HTTPS."],
-  err_unknown: ["خطأ غير معروف", "unknown error"],
-  hist_title: ["السجل والإحصائيات", "History & stats"],
-  hist_sessions: ["جلسة", "sessions"],
-  hist_punches: ["لكمة إجمالًا", "total punches"],
-  hist_minutes: ["دقيقة تدريب", "training minutes"],
-  hist_best: ["أفضل معدل/دقيقة", "best punches/min"],
-  hist_empty: ["لا توجد جلسات محفوظة بعد.", "No saved sessions yet."],
-  hist_line: ["{r} جولة · {t} · {s}", "{r} rounds · {t} · {s}"],
-  hist_summary: ["{p}/د · {g} قفاز · {d} تفادٍ", "{p}/min · {g} gloves · {d} dodges"],
-  btn_clear_history: ["حذف السجل", "Delete history"],
-  hist_confirm: ["هل تريد حذف كل السجل المحفوظ على هذا الجهاز؟", "Delete all saved history on this device?"],
-  help_title: ["نصائح للحصول على أفضل دقة", "Tips for better accuracy"],
-  help_1: ["ضع الهاتف على حامل ثابت على ارتفاع الصدر تقريبًا، ويفضّل أن يكون بعيدًا عنك بمترين تقريبًا.", "Put the phone on a stable stand at about chest height, roughly two meters away."],
-  help_2: ["يجب أن يظهر <b>كتفاك ويداك كاملتان</b> داخل الإطار. الأرجل والوركان غير ضروريين.", "Your <b>shoulders and both hands</b> must be inside the frame. Legs and hips are not required."],
-  help_3: ["استخدم إضاءة أمامية جيدة، وتجنب الوقوف أمام نافذة أو ضوء خلفك.", "Use good front lighting and avoid standing in front of a window or with a light behind you."],
-  help_4: ["الكاميرا الأمامية تعكس الصورة كالمرآة، وهذا طبيعي.", "The front camera mirrors the image, like a mirror. That is normal."],
-  help_5: ["اللكمات المستقيمة نحو الكاميرا تُكتشف عبر تغيّر العمق، لذا قد تحتاج لتجربة مسافة مختلفة.", "Straight punches toward the camera are detected by depth change, so you may need to try a different distance."],
-  help_6: ["إذا كانت اللكمات تُعد مرتين، زد مدة الانتظار بتعديل الثوابت في أعلى ملف <b>script.js</b>.", "If punches count twice, adjust the constants at the top of <b>script.js</b>."],
-  help_7: ["إذا لم تُعد اللكمات، جرّب تقليل <b>SPEED_MIN</b> أو تقليل <b>EXT_ON</b> في نفس الملف.", "If punches are not counted, try lowering <b>SPEED_MIN</b> or <b>EXT_ON</b> in the same file."],
-  help_limit: ["حدود النظام: كاميرا واحدة لا تقيس العمق بدقة، لذلك فالتمييز بين الجاب والكروس والكشف عن اللكمات المستقيمة تقديري.", "System limits: one camera cannot measure depth precisely, so telling jab from cross and detecting straight punches is an estimate."],
-};
-
-// يعيد النص باللغة الحالية، ويستبدل {متغيرات}
-function t(key, vars) {
-  const pair = T[key];
-  let s = pair ? pair[lang === "en" ? 1 : 0] : key;
-  if (vars) for (const k in vars) s = s.split(`{${k}}`).join(String(vars[k]));
-  return s;
-}
 
 // ---------- مساعدات DOM ----------
 const $ = (id) => document.getElementById(id);
 const IDS = [
-  "homeScreen", "setupScreen", "trainScreen", "cam", "stage",
-  "roundSec", "roundCount", "restSec", "speedSel", "stanceSel", "facingSel", "soundToggle",
-  "btnStart", "btnHistory", "btnHelp", "btnSettings", "btnSetupBack", "homeMsg", "banner",
-  "setupTitle", "setupLogo",
+  "homeScreen", "trainScreen", "cam", "stage",
+  "roundSec", "roundCount", "restSec", "stanceSel", "facingSel", "soundToggle",
+  "btnStart", "btnHistory", "btnHelp", "homeMsg", "banner",
   "roundLabel", "timer", "statusPill", "total", "leftCount", "rightCount",
-  "jabCount", "crossCount", "ppm", "targetHits", "dodges", "pillarHits",
+  "jabCount", "crossCount", "hits", "ppm", "targetHits", "dodges", "pillarHits",
   "btnPause", "btnStance", "btnCam", "btnRotate", "btnStop", "toast",
   "calibOverlay", "calibStatus", "calibBtn", "calibCancel",
   "restOverlay", "restCount", "restNext", "restSkip",
   "pauseOverlay", "btnResume",
   "resultOverlay", "resultBody", "btnAgain", "btnHome",
   "historyModal", "historyBody", "btnClearHistory", "btnCloseHistory",
-  "helpModal", "btnCloseHelp", "seqPrompt", "btnStats", "btnLabels", "sensSel", "countSel", "splash",
-  "settingsModal", "langSel", "btnCloseSettings", "btnResetHistory",
+  "helpModal", "btnCloseHelp",
 ];
 const el = {};
 for (const id of IDS) el[id] = $(id);
@@ -246,27 +58,14 @@ for (const id of IDS) el[id] = $(id);
 const ctx = el.stage.getContext("2d");
 
 // ---------- الحالة العامة ----------
-const STATUS_KEYS = { calib: "status_calib", round: "status_round", rest: "status_rest", paused: "status_paused", done: "status_done" };
+const STATUS_LABEL = { calib: "معايرة", round: "تسجيل نشط", rest: "راحة", paused: "متوقف", done: "انتهى" };
 
-let lang = "ar";                 // ar | en
-let prefs = {};                  // الإعدادات المحفوظة محليًا
 let landmarker = null;
 let stream = null;
 let mirror = true;               // الكاميرا الأمامية تُعكس كالمرآة
 let facingMode = "user";
 let state = "home";              // home | calib | round | rest | paused | done
-let stance = "orthodox";
-let pendingMode = "free";        // نوع التدريب المختار من البطاقات: free | sequence | dodge
-let mode = "free";               // النوع الفعلي للجلسة الحالية
-let speedMul = 1;                // مضاعِف السرعة للجلسة الحالية
-let seq = [];                    // التسلسل الحالي: [{kind, hand, lane, high, spd, ms}]
-let seqIdx = 0;
-let statsHidden = true;        // القائمة مخفية افتراضيًا
-let labelsOn = false;            // توضيح نوع اللكمة مخفي افتراضيًا
-let sessionSpeed = "mid";        // سرعة الجلسة: slow | mid | fast
-let speedMinNow = CFG.SPEED_MIN;  // حد السرعة للجلسة الحالية (حسب الحساسية)
-let extOnNow = CFG.EXT_ON;        // حد الامتداد للجلسة الحالية (حسب الحساسية)
-let countTargetsOnly = false;     // الحرّ: احتساب اللكمات على الأهداف فقط
+let stance = "orthodox";         // orthodox = اليسرى أمامية
 let soundOn = true;
 
 let totalRounds = 3, currentRound = 1;
@@ -280,7 +79,6 @@ let hands = { left: freshHand(), right: freshHand() };
 let lastPose = null;             // آخر مجموعة نقاط للجسم
 let poseSW = 0;                  // عرض الكتفين بالبكسل (في فضاء الفيديو)
 let stableSince = 0, calibReady = false;
-let countdownMs = -1;            // العد التنازلي قبل الجولة (-1 = غير نشط)
 
 let lastTs = 0, rafId = 0;
 let lastDetectTs = -1;           // آخر طابع وقت أُرسل للكشف (يجب أن يكون متزايدًا)
@@ -289,23 +87,24 @@ let cw = 0, ch = 0, dpr = 1;     // أبعاد الـ canvas (CSS px)
 let scale = 1, offX = 0, offY = 0;
 let dw = 0, dh = 0;              // أبعاد الصورة بعد التدوير (كما تُعرض على الشاشة)
 let rot = 0;                     // التدوير: 0 | 1 (90°) | 2 (180°) | 3 (270°)
-let rotAuto = false;             // التدوير التلقائي حتى يضغط المستخدم زر التدوير
+let rotAuto = true;              // التدوير التلقائي حتى يضغط المستخدم زر التدوير
 let videoKey = "";               // لتجنب تحديث عنصر الفيديو دون داع
 
 let floaters = [];
+let bag = createBag();
 let targets = [];                // أهداف القفاز: {state: live|hit|miss, lane, k, age}
-let pillars = [];                // الحواجز: {lane, k, judged}
+let pillars = [];                // الأعمدة: {lane, k, judged}
 let nextTargetAt = 0, nextPillarAt = 0;
-let flashRed = 0;                // وميض أحمر عند ضربة من حاجز
+let flashRed = 0;                // وميض أحمر عند ضربة من عمود
 let audioCtx = null;
 let toastTimer = 0;
 
 function freshStats() {
   return { total: 0, left: 0, right: 0, jab: 0, cross: 0, hits: 0,
-           targetHits: 0, targetMiss: 0, dodges: 0, pillarHits: 0, seqDone: 0, wrongHand: 0 };
+           targetHits: 0, targetMiss: 0, dodges: 0, pillarHits: 0 };
 }
 function freshHand() {
-  return { armed: true, hist: [], lastPunch: -1e9, lastJudge: -1e9, contactUntil: 0 };
+  return { armed: true, hist: [], lastPunch: -1e9 };
 }
 function resetHands() {
   hands.left = freshHand();
@@ -316,6 +115,9 @@ function dropHandTracking() {
     hands[s].hist = [];
     hands[s].armed = true;
   }
+}
+function createBag() {
+  return { angle: 0, vel: 0, flash: 0, dir: 1 };
 }
 function pickLane() {
   return [-1, 0, 1][Math.floor(Math.random() * 3)];
@@ -332,7 +134,7 @@ function fmtTime(ms) {
 }
 function fmtDate(iso) {
   try {
-    return new Date(iso).toLocaleString(lang === "en" ? "en" : "ar", { dateStyle: "medium", timeStyle: "short" });
+    return new Date(iso).toLocaleString("ar", { dateStyle: "medium", timeStyle: "short" });
   } catch {
     return iso;
   }
@@ -349,70 +151,10 @@ function showToast(text) {
 }
 function showScreen(name) {
   el.homeScreen.classList.toggle("active", name === "home");
-  el.setupScreen.classList.toggle("active", name === "setup");
   el.trainScreen.classList.toggle("active", name === "train");
 }
-function addFloater(text, x, y, color = "#ffffff", kind = "") {
-  floaters.push({ text, x, y, color, kind, born: performance.now() });
-}
-
-// ---------- الإعدادات المحفوظة (اللغة، الصوت، آخر اختيارات الجلسة) ----------
-function loadPrefs() {
-  try {
-    const p = JSON.parse(localStorage.getItem(PREFS_KEY));
-    return p && typeof p === "object" ? p : {};
-  } catch {
-    return {};
-  }
-}
-function savePrefs() {
-  prefs = {
-    lang,
-    sound: el.soundToggle.checked,
-    roundSec: el.roundSec.value,
-    roundCount: el.roundCount.value,
-    restSec: el.restSec.value,
-    speed: el.speedSel.value,
-    stance: el.stanceSel.value,
-    facing: el.facingSel.value,
-    sens: el.sensSel.value,
-    count: el.countSel.value,
-  };
-  try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
-  } catch {}
-}
-function applyPrefs() {
-  prefs = loadPrefs();
-  const pick = (node, v) => { if (v !== undefined && [...node.options].some((o) => o.value === String(v))) node.value = String(v); };
-  pick(el.roundSec, prefs.roundSec);
-  pick(el.roundCount, prefs.roundCount);
-  pick(el.restSec, prefs.restSec);
-  pick(el.speedSel, prefs.speed);
-  pick(el.stanceSel, prefs.stance);
-  pick(el.facingSel, prefs.facing);
-  pick(el.sensSel, prefs.sens);
-  pick(el.countSel, prefs.count);
-  if (typeof prefs.sound === "boolean") el.soundToggle.checked = prefs.sound;
-  lang = prefs.lang === "en" ? "en" : "ar";
-}
-
-// ---------- اللغة: تطبيق النصوص على الواجهة كلها ----------
-function applyLang() {
-  document.documentElement.lang = lang;
-  document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
-  document.querySelectorAll("[data-i18n]").forEach((n) => { n.textContent = t(n.dataset.i18n); });
-  document.querySelectorAll("[data-i18n-html]").forEach((n) => { n.innerHTML = t(n.dataset.i18nHtml); });
-  el.langSel.value = lang;
-  setSetupMode();
-  setStatsHidden(statsHidden);
-  setLabels(labelsOn);
-  updateHud();
-}
-function setLang(v) {
-  lang = v === "en" ? "en" : "ar";
-  savePrefs();
-  applyLang();
+function addFloater(text, x, y, color = "#ffffff") {
+  floaters.push({ text, x, y, color, born: performance.now() });
 }
 
 // ---------- الصوت (WebAudio، بدون ملفات خارجية) ----------
@@ -467,10 +209,10 @@ async function ensureLandmarker() {
 async function openCamera() {
   stopCamera();
   if (!window.isSecureContext) {
-    throw new Error(t("err_https"));
+    throw new Error("يجب فتح التطبيق عبر HTTPS (أو localhost) لتعمل الكاميرا.");
   }
   if (!navigator.mediaDevices?.getUserMedia) {
-    throw new Error(t("err_no_api"));
+    throw new Error("هذا المتصفح لا يدعم الوصول إلى الكاميرا.");
   }
   stream = await navigator.mediaDevices.getUserMedia({
     audio: false,
@@ -485,7 +227,7 @@ async function openCamera() {
   const reported = track?.getSettings?.().facingMode;
   mirror = (reported ?? facingMode) === "user";
 
-  // الفيديو يظهر فعلًا (وليس مخفيًا)، والـ canvas فوقه يرسم الأهداف والهيكل
+  // الفيديو يظهر فعلًا (وليس مخفيًا)، والـ canvas فوقه يرسم الكيس والهيكل
   el.cam.muted = true;
   el.cam.srcObject = stream;
   if (el.cam.readyState < 1) {
@@ -500,7 +242,7 @@ async function openCamera() {
 
 function stopCamera() {
   if (stream) {
-    stream.getTracks().forEach((tr) => tr.stop());
+    stream.getTracks().forEach((t) => t.stop());
     stream = null;
   }
   el.cam.srcObject = null;
@@ -513,54 +255,33 @@ async function switchCamera() {
     resetHands();
     lastPose = null;
     resizeCanvas();
-    showToast(mirror ? t("toast_front") : t("toast_back"));
+    showToast(mirror ? "الكاميرا الأمامية" : "الكاميرا الخلفية");
   } catch (err) {
     console.error(err);
-    showToast(t("toast_cam_fail"));
+    showToast("تعذر تبديل الكاميرا");
   }
 }
 
 function describeError(err) {
   const name = err?.name;
-  if (name === "NotAllowedError") return t("err_perm");
-  if (name === "NotFoundError") return t("err_notfound");
-  if (name === "NotReadableError") return t("err_busy");
+  if (name === "NotAllowedError") return "تم رفض إذن الكاميرا. فعّله من إعدادات المتصفح ثم أعد المحاولة.";
+  if (name === "NotFoundError") return "لم يتم العثور على كاميرا في هذا الجهاز.";
+  if (name === "NotReadableError") return "الكاميرا مستخدمة من تطبيق آخر. أغلقه ثم أعد المحاولة.";
   if (err?.message?.includes("HTTPS")) return err.message;
-  return t("err_generic", { msg: err?.message || t("err_unknown") });
+  return "تعذر تشغيل التطبيق: " + (err?.message || "خطأ غير معروف") +
+    ". تأكد من اتصال الإنترنت (لتحميل نموذج الرؤية) ومن فتح الصفحة عبر HTTPS.";
 }
 
 // ---------- الإعدادات ----------
 function readSettings() {
-  rotAuto = false;
-  rot = 0;
-  autoRotKey = "";
+  rotAuto = true;
   videoKey = "";
   stance = el.stanceSel.value;
-  mode = pendingMode;
-  sessionSpeed = el.speedSel.value;
-  const sens = SENS[el.sensSel.value] ?? SENS.mid;
-  speedMinNow = sens.speed;
-  extOnNow = sens.ext;
-  countTargetsOnly = el.countSel.value === "targets";
-  speedMul = SPEED_MUL[sessionSpeed] ?? 1;
   facingMode = el.facingSel.value;
   soundOn = el.soundToggle.checked;
   roundDurMs = Number(el.roundSec.value) * 1000;
   totalRounds = Number(el.roundCount.value);
   restDurMs = Number(el.restSec.value) * 1000;
-}
-
-// ---------- اختيار نوع التدريب وشاشة الإعدادات ----------
-function setSetupMode() {
-  el.setupScreen.dataset.mode = pendingMode;
-  el.setupTitle.textContent = t("name_" + pendingMode);
-  el.setupLogo.textContent = MODE_LOGO[pendingMode] || "🥊";
-}
-function openSetup(m) {
-  pendingMode = m;
-  setSetupMode();
-  setHomeMsg("");
-  showScreen("setup");
 }
 
 // ---------- دورة الجلسة ----------
@@ -569,15 +290,13 @@ async function startSession() {
   setHomeMsg("");
   const oldLabel = el.btnStart.textContent;
   el.btnStart.disabled = true;
-  el.btnStart.textContent = t("btn_preparing");
+  el.btnStart.textContent = "جارٍ تجهيز الكاميرا...";
   try {
     readSettings();
-    savePrefs();
     getAudio();                 // تفعيل الصوت ضمن نقرة المستخدم
     await ensureLandmarker();
     await openCamera();
     resetSession();
-    setStatsHidden(true);
     showScreen("train");
     setState("calib");
     resizeCanvas();
@@ -599,6 +318,7 @@ function resetSession() {
   restMs = 0;
   currentRound = 1;
   floaters = [];
+  bag = createBag();
   resetHands();
   targets = [];
   pillars = [];
@@ -606,9 +326,6 @@ function resetSession() {
   lastPose = null;
   calibReady = false;
   stableSince = 0;
-  countdownMs = -1;
-  seq = [];
-  seqIdx = 0;
 }
 
 function setState(s) {
@@ -617,7 +334,7 @@ function setState(s) {
   el.restOverlay.hidden = s !== "rest";
   el.pauseOverlay.hidden = s !== "paused";
   if (s === "rest") {
-    el.restNext.textContent = t("rest_next", { n: currentRound });
+    el.restNext.textContent = `الجولة ${currentRound} ستبدأ بعد الراحة`;
   }
   updateHud();
 }
@@ -627,8 +344,6 @@ function startRound() {
   resetHands();
   targets = [];
   pillars = [];
-  seq = [];
-  seqIdx = 0;
   nextTargetAt = activeMs + 500;
   nextPillarAt = activeMs + 4000;
   tone(660, 0.2, 0.2);
@@ -662,7 +377,6 @@ function finishSession() {
   const minutes = activeMs / 60000;
   const sess = {
     date: new Date().toISOString(),
-    mode,
     durationSec: Math.round(activeMs / 1000),
     roundsDone: currentRound,
     stance,
@@ -729,15 +443,6 @@ function loop(now) {
 
 function updateState(dt) {
   flashRed = Math.max(0, flashRed - dt / 400);
-  if (state === "calib" && countdownMs >= 0) {
-    countdownMs += dt;
-    if (countdownMs >= 3000) {
-      countdownMs = -1;
-      startRound();
-      return;
-    }
-    setText(el.calibStatus, t("countdown", { n: 3 - Math.floor(countdownMs / 1000) }));
-  }
   if (state === "round") {
     roundMs += dt;
     activeMs += dt;
@@ -772,7 +477,7 @@ function detect(now) {
   poseSW = Math.hypot((L.x - R.x) * vw, (L.y - R.y) * vh);
   updateCalibration(lm, poseSW, now);
 
-  const canCount = state === "round" && mode !== "dodge";
+  const canCount = state === "round";
   processHand("left", lm, now, canCount);
   processHand("right", lm, now, canCount);
 }
@@ -814,150 +519,51 @@ function processHand(side, lm, now, canCount) {
     speed = Math.hypot(wx - o.x, wy - o.y, (zF - o.zF) * sw) / sw / dt;
   }
 
-  // بعد الضربة نتابع المعصم نصف ثانية، فإن لامس قفازًا مقتربًا تُحتسب الإصابة
-  if (canCount && now < H.contactUntil) {
-    const sp = toScreen(W.x, W.y);
-    if (tryTargetHit(side, sp)) H.contactUntil = 0;
-  }
-
-  const extended = ext > extOnNow || zF > CFG.Z_ON;
+  const extended = ext > CFG.EXT_ON || zF > CFG.Z_ON;
   const retracted = ext < CFG.EXT_OFF && zF < CFG.Z_OFF;
-  if (retracted || now - H.lastJudge > CFG.REARM_MS) H.armed = true;
+  if (retracted) H.armed = true;
 
-  if (canCount && mode === "sequence") {
-    // في التسلسل: يكفي أن تصل الذراع الممدودة إلى الهدف، ولكل امتداد حكم واحد فقط
-    // الهدف لا يُحتسب إلا بلكمة حقيقية (سرعة كافية)، فلا تُحتسب لمسة بطيئة أو يد ثابتة
-    if (extended && H.armed && speed >= speedMinNow * 0.8 && judgeSequenceHit(side, W.x, W.y)) { H.armed = false; H.lastJudge = now; }
-  } else if (canCount && countTargetsOnly) {
-    // الحرّ مع احتساب الأهداف فقط: لا تُحتسب اللكمة إلا إذا وصلت إلى هدف حي
-    if (extended && H.armed && speed >= speedMinNow * 0.8 && judgeTargetPunch(side, W.x, W.y)) { H.armed = false; H.lastJudge = now; }
-  } else if (canCount && extended && speed >= speedMinNow) {
-    if (H.armed && now - H.lastPunch >= CFG.COOLDOWN_MS) {
-      H.armed = false;
-      H.lastPunch = now;
-      H.lastJudge = now;
-      registerPunch(side, W.x, W.y, now);
-    }
+  if (canCount && H.armed && extended &&
+      speed >= CFG.SPEED_MIN && now - H.lastPunch >= CFG.COOLDOWN_MS) {
+    H.armed = false;
+    H.lastPunch = now;
+    registerPunch(side, W.x, W.y);
   }
 }
 
-function handName(side) {
-  return side === "left" ? t("hand_left") : t("hand_right");
-}
-
-function registerPunch(side, nx, ny, now) {
+function registerPunch(side, nx, ny) {
   // اليد الأمامية = الجاب، والخلفية = الكروس
   const lead = stance === "orthodox" ? "left" : "right";
   const type = side === lead ? "jab" : "cross";
+  // جسر أكاديمية الكومبو: يستقبل اللكمة المعدودة فقط (لا يغيّر العدّ الحالي)
+  window.ShadowBoxCombo?.onPunch?.(side, type, performance.now());
   const p = toScreen(nx, ny);
 
   stats.total++;
   stats[side]++;
   stats[type]++;
-  addFloater(`${handName(side)} · ${type === "jab" ? t("kind_jab") : t("kind_cross")}`, p.x, p.y, "#ffffff", "punch");
+  addFloater(`${side === "left" ? "يسرى" : "يمنى"} · ${type === "jab" ? "جاب" : "كروس"}`,
+             p.x, p.y, "#ffffff");
 
-  // نافذة تتبع قصيرة بعد الضربة (انظر processHand)
-  hands[side].contactUntil = now + 500;
-  if (!tryTargetHit(side, p)) tone(220, 0.07, 0.12, "square");
-  updateHud();
-}
-
-// يولّد تسلسلًا عشوائيًا: كل خطوة لها نوع ضربة ويد ومكان وسرعة
-function newSequence() {
-  const lead = stance === "orthodox" ? "left" : "right";
-  const rear = lead === "left" ? "right" : "left";
-  seq = [];
-  for (let i = 0; i < SEQ_LEN; i++) {
-    const kind = Math.random() < 0.5 ? "jab" : "cross";
-    seq.push({
-      kind,
-      hand: kind === "jab" ? lead : rear,
-      lane: pickLane(),
-      high: Math.random() < 0.5,
-      ms: Math.round(SEQ_BASE_MS * speedMul),
-    });
-  }
-  seqIdx = 0;
-}
-
-function advanceSeq() {
-  seqIdx++;
-  if (seqIdx >= seq.length) {
-    stats.seqDone++;
-    seq = [];
-    seqIdx = 0;
-  }
-}
-
-// يحاول احتساب الضربة على الهدف؛ يعيد true إن كانت الضربة قد استُهلكت على هدف
-function tryTargetHit(side, p) {
+  // هل وقعت اللكمة على القفاز المقترب؟
   const tgt = findTargetAt(p.x, p.y);
-  if (!tgt) return false;
-  if (tgt.seqMode && tgt.hand !== side) {
-    stats.wrongHand++;
-    addFloater(t("fl_wrong"), p.x, p.y - 36, "#ff5a64");
-    tone(180, 0.12, 0.15, "square");
-    return true;
+  if (tgt) {
+    tgt.state = "hit";
+    tgt.age = 0;
+    stats.targetHits++;
+    nextTargetAt = activeMs + TARGET_GAP_MS;
+    addFloater("+1 🥊", p.x, p.y - 36, "#ffd166");
+    tone(520, 0.12, 0.2, "triangle");
+  } else {
+    tone(220, 0.07, 0.12, "square");
   }
-  applyTargetHit(tgt, p);
-  return true;
-}
-
-// كل هدف يُحكم عليه مرة واحدة: اليد الصحيحة تحتسب إصابة، واليد الخاطئة تُسجَّل خطأً مرة واحدة فقط
-function judgeSequenceHit(side, nx, ny) {
-  const p = toScreen(nx, ny);
-  const tgt = findTargetAt(p.x, p.y);
-  if (!tgt || tgt.judged) return false;
-  if (tgt.hand === side) {
-    tgt.judged = true;
-    stats.total++;
-    stats[side]++;
-    stats[tgt.kind]++;
-    addFloater(`${handName(side)} · ${tgt.kind === "jab" ? t("kind_jab") : t("kind_cross")}`, p.x, p.y, "#ffffff", "punch");
-    applyTargetHit(tgt, p);
-    return true;
-  }
-  if (!tgt.wrongCounted) {
-    tgt.wrongCounted = true;
-    stats.wrongHand++;
-    addFloater(t("fl_wrong"), p.x, p.y - 36, "#ff5a64");
-    tone(180, 0.12, 0.15, "square");
-    return true;
-  }
-  return false;
-}
-
-// الوضع الحر مع احتساب الأهداف فقط: تُحتسب اللكمة إذا لامست هدفًا حيًا
-function judgeTargetPunch(side, nx, ny) {
-  const p = toScreen(nx, ny);
-  const tgt = findTargetAt(p.x, p.y);
-  if (!tgt || tgt.judged) return false;
-  tgt.judged = true;
-  const lead = stance === "orthodox" ? "left" : "right";
-  const type = side === lead ? "jab" : "cross";
-  stats.total++;
-  stats[side]++;
-  stats[type]++;
-  addFloater(`${handName(side)} · ${type === "jab" ? t("kind_jab") : t("kind_cross")}`, p.x, p.y, "#ffffff", "punch");
-  applyTargetHit(tgt, p);
-  return true;
-}
-
-function applyTargetHit(tgt, p) {
-  tgt.state = "hit";
-  tgt.age = 0;
-  stats.targetHits++;
-  nextTargetAt = activeMs + TARGET_GAP_MS;
-  if (tgt.seqMode) advanceSeq();
-  addFloater(t("fl_target"), p.x, p.y - 36, "#ffd166");
-  tone(520, 0.12, 0.2, "triangle");
   updateHud();
 }
 
 // ---------- المعايرة ----------
 function updateCalibration(lm, sw, now) {
   if (state !== "calib") return;
-  let msg = t("calib_none");
+  let msg = "لم يتم اكتشاف جسمك بعد. تأكد من الإضاءة وأن الكاميرا تظهر جسمك.";
   let ok = false;
 
   if (lm) {
@@ -967,10 +573,10 @@ function updateCalibration(lm, sw, now) {
       (i) => lm[i].x > 0.02 && lm[i].x < 0.98 && lm[i].y > 0.02 && lm[i].y < 0.98
     );
     const ratio = sw / (isRotated() ? vh : vw);
-    if (!visOk || !inFrame) msg = t("calib_show");
-    else if (ratio < CFG.SW_MIN) msg = t("calib_closer");
-    else if (ratio > CFG.SW_MAX) msg = t("calib_back");
-    else { ok = true; msg = t("calib_ok"); }
+    if (!visOk || !inFrame) msg = "أظهر كتفيك ويديك كاملتين داخل الإطار";
+    else if (ratio < CFG.SW_MIN) msg = "اقترب قليلًا من الكاميرا";
+    else if (ratio > CFG.SW_MAX) msg = "ابتعد قليلًا عن الكاميرا";
+    else { ok = true; msg = "ممتاز! جسمك واضح داخل الإطار"; }
   }
 
   if (ok) {
@@ -979,15 +585,13 @@ function updateCalibration(lm, sw, now) {
   } else {
     stableSince = 0;
     calibReady = false;
-    countdownMs = -1;            // أي خلل في الوضعية يلغي العد التنازلي
   }
-  if (calibReady && countdownMs < 0) countdownMs = 0;   // يبدأ العد تلقائيًا
-  el.calibBtn.hidden = true;                             // لا حاجة لزر البدء
-  if (countdownMs >= 0) return;                          // النص يُحدَّث من updateState
+  if (calibReady) msg = "✅ جاهز. اضغط «ابدأ الجولة»";
   setText(el.calibStatus, msg);
+  el.calibBtn.disabled = !calibReady;
 }
 
-// ---------- تخطيط الفيديو (cover: تملأ الشاشة دون فراغات) ----------
+// ---------- تخطيط الفيديو (contain: تظهر الصورة كاملة دون قص) ----------
 function resizeCanvas() {
   const r = el.stage.getBoundingClientRect();
   cw = r.width;
@@ -1002,21 +606,13 @@ function isRotated() {
   return rot % 2 === 1;
 }
 
-let autoRotKey = "";
 function updateLayout() {
   if (!vw || !vh || !cw || !ch) return;
-  // التدوير التلقائي يُحسب عند تغيّر أبعاد الفيديو أو الشاشة فقط، لا في كل إطار
-  if (rotAuto) {
-    const key = `${vw}x${vh}|${cw}x${ch}`;
-    if (key !== autoRotKey) {
-      autoRotKey = key;
-      rot = (vw > vh) !== (cw > ch) ? 1 : 0;
-      videoKey = "";
-    }
-  }
+  // إن كانت الكاميرا أفقية والشاشة عمودية (أو العكس) ندوّر الصورة 90° لتملأ الشاشة
+  if (rotAuto) rot = (vw > vh) !== (cw > ch) ? 1 : 0;
   dw = isRotated() ? vh : vw;
   dh = isRotated() ? vw : vh;
-  scale = Math.max(cw / dw, ch / dh);   // cover: تملأ الشاشة دون فراغات
+  scale = Math.min(cw / dw, ch / dh);
   offX = 0;
   offY = 0;
 }
@@ -1033,6 +629,24 @@ function drawCamera() {
   ctx.restore();
 }
 
+// يضع عنصر الفيديو في مكانه الصحيح مع التدوير والمرآة
+function placeVideo() {
+  const w = vw * scale, h = vh * scale;
+  const cx = cw / 2, cy = ch / 2;
+  const transform = `scaleX(${mirror ? -1 : 1}) rotate(${rot * 90}deg)`;
+  const key = [w, h, cx, cy, transform].join("|");
+  if (key === videoKey) return;
+  videoKey = key;
+  const s = el.cam.style;
+  s.left = `${cx - w / 2}px`;
+  s.top = `${cy - h / 2}px`;
+  s.width = `${w}px`;
+  s.height = `${h}px`;
+  s.right = "auto";
+  s.bottom = "auto";
+  s.transform = transform;
+}
+
 // يحوّل إحداثيات الفيديو الأصلية (0..1) إلى إحداثيات الشاشة، مع التدوير والمرآة
 function toScreen(nx, ny) {
   const u = (nx - 0.5) * vw * scale;
@@ -1045,20 +659,129 @@ function toScreen(nx, ny) {
   return { x: cw / 2 + x, y: ch / 2 + y };
 }
 
+// ---------- الكيس الافتراضي ----------
+function bagGeom() {
+  const w = Math.min(cw * 0.34, 170);
+  const h = Math.min(ch * 0.46, w * 2.6);
+  const ceilingY = ch * 0.03;
+  const top = ch * 0.16;
+  return { w, h, ceilingY, top, len: top - ceilingY, cx: cw / 2 };
+}
+
+function bagHit(x, y) {
+  const g = bagGeom();
+  const cy = g.top + g.h * 0.5;
+  const dx = (x - g.cx) / (g.w * 0.75);
+  const dy = (y - cy) / (g.h * 0.55);
+  return dx * dx + dy * dy <= 1;
+}
+
+function bagImpact(strength, hit) {
+  bag.dir *= -1;
+  bag.vel += bag.dir * 0.9 * strength;
+  if (hit) bag.flash = 1;
+}
+
+function updateBag(dt) {
+  if (dt <= 0) return;
+  const steps = 4;
+  const h = dt / steps;
+  for (let i = 0; i < steps; i++) {
+    const acc = -22 * bag.angle - 2.5 * bag.vel;   // زنبرك مخمّد
+    bag.vel += acc * h;
+    bag.angle += bag.vel * h;
+  }
+  bag.angle = Math.max(-0.4, Math.min(0.4, bag.angle));
+  bag.flash = Math.max(0, bag.flash - dt * 3);
+}
+
+function capsulePath(x, y, w, h) {
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x, y, w, h, w / 2);
+  else ctx.rect(x, y, w, h);
+}
+
+function drawBag() {
+  const g = bagGeom();
+
+  ctx.fillStyle = "#2b2b2b";
+  ctx.fillRect(g.cx - g.w * 0.8, g.ceilingY - 5, g.w * 1.6, 6);
+
+  ctx.save();
+  ctx.translate(g.cx, g.ceilingY);
+  ctx.rotate(bag.angle);
+
+  ctx.strokeStyle = "#8d9296";
+  ctx.lineWidth = 2;
+  for (const s of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(s * g.w * 0.08, 0);
+    ctx.lineTo(s * g.w * 0.26, g.len);
+    ctx.stroke();
+  }
+
+  const x = -g.w / 2, y = g.len;
+  capsulePath(x, y, g.w, g.h);
+  const grad = ctx.createLinearGradient(x, 0, x + g.w, 0);
+  grad.addColorStop(0, "#0b0b0b");
+  grad.addColorStop(0.3, "#2c0609");
+  grad.addColorStop(0.5, "#8e0f1a");
+  grad.addColorStop(0.7, "#2c0609");
+  grad.addColorStop(1, "#0b0b0b");
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  ctx.save();
+  capsulePath(x, y, g.w, g.h);
+  ctx.clip();
+
+  ctx.strokeStyle = "rgba(0,0,0,0.55)";
+  ctx.lineWidth = 2;
+  for (let k = 1; k < 6; k++) {
+    const yy = y + (g.h * k) / 6;
+    ctx.beginPath();
+    ctx.moveTo(x, yy);
+    ctx.quadraticCurveTo(0, yy + 6, x + g.w, yy);
+    ctx.stroke();
+  }
+
+  const hl = ctx.createRadialGradient(-g.w * 0.2, y + g.h * 0.25, 4, -g.w * 0.2, y + g.h * 0.25, g.w * 0.6);
+  hl.addColorStop(0, "rgba(255,255,255,0.22)");
+  hl.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = hl;
+  ctx.fillRect(x, y, g.w, g.h);
+
+  if (bag.flash > 0) {
+    ctx.fillStyle = `rgba(255,70,80,${bag.flash * 0.35})`;
+    ctx.fillRect(x, y, g.w, g.h);
+  }
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(0, y + g.h * 0.5);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillStyle = "rgba(255,255,255,0.35)";
+  ctx.font = `800 ${Math.round(g.w * 0.13)}px system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.fillText("SHADOWBOX", 0, 0);
+  ctx.restore();
+
+  ctx.restore();
+}
+
 // ---------- القفاز المقترب (الهدف) ----------
 // t.k من 0 (بعيد، في المنتصف عند الأفق) إلى 1 (قريب منك)
 function targetPos(t) {
-  const y = t.high === undefined ? ch * (0.2 + 0.3 * t.k) : ch * ((t.high ? 0.14 : 0.3) + 0.25 * t.k);
-  return { x: cw / 2 + t.lane * cw * 0.3 * t.k, y };
+  return { x: cw / 2 + t.lane * cw * 0.3 * t.k, y: ch * (0.3 + 0.3 * t.k) };
 }
 function targetRadius(t) {
   return Math.min(cw, ch) * (0.035 + 0.13 * Math.pow(t.k, 1.3));
 }
 function findTargetAt(x, y) {
   for (const t of targets) {
-    if (t.state !== "live" || t.k < 0.12) continue;
+    if (t.state !== "live" || t.k < 0.25) continue;
     const p = targetPos(t);
-    if (Math.hypot(x - p.x, y - p.y) <= targetRadius(t) * 1.3) return t;
+    if (Math.hypot(x - p.x, y - p.y) <= targetRadius(t) * 1.15) return t;
   }
   return null;
 }
@@ -1067,35 +790,25 @@ function updateGame(dt) {
   // تحديث الأهداف
   for (const t of targets) {
     if (t.state === "live") {
-      t.k += dt / (t.ms || TARGET_MS * speedMul);
+      t.k += dt / TARGET_MS;
       if (t.k >= 1) {
         t.state = "miss";
         t.age = 0;
         stats.targetMiss++;
         nextTargetAt = activeMs + TARGET_GAP_MS;
-        if (t.seqMode) advanceSeq();
       }
     } else {
       t.age += dt;
     }
   }
   targets = targets.filter((t) => t.state === "live" || t.age < 400);
-  // لا يظهر قفاز خلف حاجز قريب، ولا يظهر حاجز والقفاز ما زال مقتربًا
-  if (mode !== "dodge" && !targets.some((t) => t.state === "live") && activeMs >= nextTargetAt &&
-      !pillars.some((p) => p.k > 0.45)) {
-    if (mode === "sequence") {
-      if (!seq.length) newSequence();
-      const st = seq[seqIdx];
-      targets.push({ state: "live", lane: st.lane, high: st.high, ms: st.ms, hand: st.hand, kind: st.kind, seqMode: true, judged: false, wrongCounted: false, k: 0, age: 0 });
-    } else {
-      targets.push({ state: "live", lane: pickLane(), ms: Math.round(TARGET_MS * speedMul), k: 0, age: 0 });
-    }
+  if (!targets.some((t) => t.state === "live") && activeMs >= nextTargetAt) {
+    targets.push({ state: "live", lane: pickLane(), k: 0, age: 0 });
   }
 
-  // تحديث الحواجز
-  const pillarMs = PILLAR_MS * speedMul;
+  // تحديث الأعمدة
   for (const p of pillars) {
-    p.k += dt / pillarMs;
+    p.k += dt / PILLAR_MS;
     if (!p.judged && p.k >= PILLAR_JUDGE_K) judgePillar(p);
   }
   const hadPillars = pillars.length > 0;
@@ -1103,12 +816,12 @@ function updateGame(dt) {
   if (hadPillars && pillars.length === 0) {
     nextPillarAt = activeMs + PILLAR_GAP_MIN + Math.random() * PILLAR_GAP_RAND;
   }
-  if (pillars.length === 0 && activeMs >= nextPillarAt && !targets.some((t) => t.state === "live")) {
+  if (pillars.length === 0 && activeMs >= nextPillarAt) {
     pillars.push({ lane: pickLane(), k: 0, judged: false });
   }
 }
 
-// ---------- الحواجز ----------
+// ---------- الأعمدة ----------
 function pillarX(p) {
   return cw / 2 + p.lane * cw * 0.3 * p.k;
 }
@@ -1119,57 +832,46 @@ function bodyCenterX() {
   const L = lastPose[11], R = lastPose[12];
   return toScreen((L.x + R.x) / 2, (L.y + R.y) / 2).x;
 }
-function headCenterX() {
-  const n = lastPose && lastPose[0];                 // الأنف = مركز الرأس
-  if (n && (n.visibility ?? 1) > CFG.VIS_MIN) return toScreen(n.x, n.y).x;
-  return bodyCenterX();
-}
 function bodyHalfWidth() {
   return Math.max(poseSW * scale * 0.6, 30);
 }
 
-// الحكم على الحاجز: هل كان جسمك داخل مساره لحظة وصوله؟
+// الحكم على العمود: هل كان جسمك داخل مساره لحظة وصوله؟
 function judgePillar(p) {
   p.judged = true;
   if (!lastPose || !poseSW) return;          // لا حكم بدون رؤية الجسم
-  const bx = headCenterX();
+  const bx = bodyCenterX();
   const px = pillarX(p);
   const reach = pillarW(p) / 2 + bodyHalfWidth();
   const y = ch * 0.45;
   if (Math.abs(bx - px) < reach) {
     stats.pillarHits++;
     flashRed = 1;
-    addFloater(t("fl_hit"), bx, y, "#ff5a64");
+    addFloater("ضربة ✖", bx, y, "#ff5a64");
     tone(120, 0.25, 0.25, "sawtooth");
   } else {
     stats.dodges++;
-    addFloater(t("fl_dodge"), bx, y, "#7CFC9A");
+    addFloater("تفادٍ ✓", bx, y, "#7CFC9A");
     tone(880, 0.12, 0.15, "triangle");
   }
   updateHud();
 }
 
-// الحواجز: شرائح مائلة تتجه نحو الرأس
 function drawPillars() {
   for (const p of pillars) {
     if (p.k < 0.02) continue;
     const x = pillarX(p), w = pillarW(p);
-    const h = ch * (0.12 + 0.3 * p.k);
-    const cy = ch * 0.3;
+    const top = ch * 0.18, bottom = ch * 0.85;
     const a = Math.min(1, 0.3 + p.k);
-    ctx.save();
-    ctx.translate(x, cy);
-    ctx.rotate(-p.lane * 0.35);          // ميلان يتجه نحو منتصف الشاشة (الرأس)
-    const grad = ctx.createLinearGradient(-w / 2, 0, w / 2, 0);
+    const grad = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
     grad.addColorStop(0, `rgba(40,40,48,${a})`);
     grad.addColorStop(0.5, `rgba(125,130,142,${a})`);
     grad.addColorStop(1, `rgba(40,40,48,${a})`);
     ctx.fillStyle = grad;
-    ctx.fillRect(-w / 2, -h / 2, w, h);
+    ctx.fillRect(x - w / 2, top, w, bottom - top);
     ctx.strokeStyle = `rgba(225,29,46,${a})`;
     ctx.lineWidth = 2;
-    ctx.strokeRect(-w / 2, -h / 2, w, h);
-    ctx.restore();
+    ctx.strokeRect(x - w / 2, top, w, bottom - top);
   }
 }
 
@@ -1309,7 +1011,6 @@ function drawFloaters(now) {
   ctx.font = "700 16px system-ui, sans-serif";
   ctx.textAlign = "center";
   for (const f of floaters) {
-    if (f.kind === "punch" && !labelsOn) continue;   // توضيح نوع اللكمة اختياري
     const age = (now - f.born) / LIFE;
     ctx.globalAlpha = 1 - age;
     ctx.fillStyle = f.color;
@@ -1327,25 +1028,6 @@ function updateHud() {
   setText(el.jabCount, stats.jab);
   setText(el.crossCount, stats.cross);
   setText(el.ppm, ppm);
-
-  if (mode === "sequence" && state !== "home" && labelsOn) {
-    el.seqPrompt.hidden = false;
-    if (seq.length && seqIdx < seq.length) {
-      const st = seq[seqIdx];
-      const zone = `${t(st.high ? "pos_high" : "pos_low")} ${t(st.lane < 0 ? "pos_left" : st.lane > 0 ? "pos_right" : "pos_center")}`;
-      const speed = t("speed_" + sessionSpeed);
-      setText(el.seqPrompt, t("seq_line", {
-        i: seqIdx + 1, n: seq.length,
-        kind: st.kind === "jab" ? t("kind_jab") : t("kind_cross"),
-        hand: handName(st.hand),
-        zone, speed,
-      }));
-    } else {
-      setText(el.seqPrompt, t("seq_prep"));
-    }
-  } else {
-    el.seqPrompt.hidden = true;
-  }
   setText(el.targetHits, stats.targetHits);
   setText(el.dodges, stats.dodges);
   setText(el.pillarHits, stats.pillarHits);
@@ -1356,43 +1038,33 @@ function updateHud() {
   else remain = roundDurMs - roundMs;
   setText(el.timer, fmtTime(remain));
 
-  setText(el.roundLabel, t("round_label", { n: currentRound, m: totalRounds }));
-  setText(el.statusPill, STATUS_KEYS[state] ? t(STATUS_KEYS[state]) : "");
+  setText(el.roundLabel, `الجولة ${currentRound}/${totalRounds}`);
+  setText(el.statusPill, STATUS_LABEL[state] || "");
   setText(el.restCount, Math.ceil(Math.max(0, restMs) / 1000));
   el.btnPause.textContent = state === "paused" ? "▶" : "⏸";
-  el.btnRotate.textContent = `${t("btn_rotate").split(" ")[0]} ${rot * 90}°`;
-  el.btnStance.textContent = stance === "orthodox" ? t("ctrl_left") : t("ctrl_right");
-}
-
-function setStatsHidden(v) {
-  statsHidden = v;
-  document.body.classList.toggle("hide-stats", v);
-  el.btnStats.textContent = t(v ? "btn_show_stats" : "btn_hide_stats");
-}
-function setLabels(v) {
-  labelsOn = v;
-  el.btnLabels.textContent = t(v ? "lbl_hide" : "lbl_show");
+  el.btnStance.textContent = stance === "orthodox" ? "يسار أمامي" : "يمين أمامي";
 }
 
 // ---------- النتيجة ----------
 function showResult(s) {
-  const note = s.total === 0 ? t("res_none") : "";
+  const note = s.total === 0
+    ? "لم تُسجَّل أي لكمة. تأكد من ظهور كتفيك ويديك، ثم حاول مرة أخرى."
+    : "";
   el.resultBody.innerHTML = `
     <div class="res-grid">
-      <div><b>${s.total}</b><small>${t("res_total")}</small></div>
-      <div><b>${s.ppm}</b><small>${t("res_ppm")}</small></div>
-      <div><b>${fmtTime(s.durationSec * 1000)}</b><small>${t("res_time")}</small></div>
-      <div><b>${s.targetHits}</b><small>${t("res_targets")}</small></div>
-      <div><b>${s.dodges}</b><small>${t("res_dodges")}</small></div>
-      <div><b>${s.pillarHits}</b><small>${t("res_hits")}</small></div>
-      ${s.mode === "sequence" ? `<div><b>${stats.seqDone}</b><small>${t("res_combos")}</small></div><div><b>${stats.wrongHand}</b><small>${t("res_wrong")}</small></div>` : ""}
-      <div><b>${s.left}</b><small>${t("res_left")}</small></div>
-      <div><b>${s.right}</b><small>${t("res_right")}</small></div>
-      <div><b>${s.jab}</b><small>${t("res_jab")}</small></div>
-      <div><b>${s.cross}</b><small>${t("res_cross")}</small></div>
+      <div><b>${s.total}</b><small>إجمالي اللكمات</small></div>
+      <div><b>${s.ppm}</b><small>لكمة/دقيقة</small></div>
+      <div><b>${fmtTime(s.durationSec * 1000)}</b><small>وقت التدريب</small></div>
+      <div><b>${s.targetHits}</b><small>أهداف القفاز</small></div>
+      <div><b>${s.dodges}</b><small>تفادٍ ناجح</small></div>
+      <div><b>${s.pillarHits}</b><small>ضربات مستلمة</small></div>
+      <div><b>${s.left}</b><small>يسرى</small></div>
+      <div><b>${s.right}</b><small>يمنى</small></div>
+      <div><b>${s.jab}</b><small>جاب</small></div>
+      <div><b>${s.cross}</b><small>كروس</small></div>
     </div>
     ${note ? `<p class="notice">${note}</p>` : ""}
-    <p class="notice small">${t("res_note")}</p>`;
+    <p class="notice small">العدّاد تقديري ويعتمد على كاميرا واحدة. تم حفظ الجلسة محليًا.</p>`;
   el.resultOverlay.hidden = false;
 }
 
@@ -1424,24 +1096,24 @@ function renderHistory() {
 
   let html = `
     <div class="res-grid">
-      <div><b>${arr.length}</b><small>${t("hist_sessions")}</small></div>
-      <div><b>${totalPunches}</b><small>${t("hist_punches")}</small></div>
-      <div><b>${Math.round(totalSec / 60)}</b><small>${t("hist_minutes")}</small></div>
-      <div><b>${bestPpm}</b><small>${t("hist_best")}</small></div>
+      <div><b>${arr.length}</b><small>جلسة</small></div>
+      <div><b>${totalPunches}</b><small>لكمة إجمالًا</small></div>
+      <div><b>${Math.round(totalSec / 60)}</b><small>دقيقة تدريب</small></div>
+      <div><b>${bestPpm}</b><small>أفضل معدل/دقيقة</small></div>
     </div>`;
 
   if (!arr.length) {
-    html += `<p class="notice">${t("hist_empty")}</p>`;
+    html += `<p class="notice">لا توجد جلسات محفوظة بعد.</p>`;
   } else {
     html += arr.slice(0, 30).map((s) => `
       <div class="hist-item">
         <div>
           <b>${fmtDate(s.date)}</b>
-          <small>${t("hist_line", { r: s.roundsDone, t: fmtTime((s.durationSec || 0) * 1000), s: s.stance === "orthodox" ? t("ctrl_left") : t("ctrl_right") })}</small>
+          <small>${s.roundsDone} جولة · ${fmtTime((s.durationSec || 0) * 1000)} · ${s.stance === "orthodox" ? "يسار أمامي" : "يمين أمامي"}</small>
         </div>
         <div class="hist-num">
-          <b>${s.total}</b> ${t("unit_punch")}<br>
-          <small>${t("hist_summary", { p: s.ppm, g: s.targetHits || 0, d: s.dodges || 0 })}</small>
+          <b>${s.total}</b> لكمة<br>
+          <small>${s.ppm}/د · ${s.targetHits || 0} قفاز · ${s.dodges || 0} تفادٍ</small>
         </div>
       </div>`).join("");
   }
@@ -1449,7 +1121,7 @@ function renderHistory() {
 }
 
 function clearHistory() {
-  if (!confirm(t("hist_confirm"))) return;
+  if (!confirm("هل تريد حذف كل السجل المحفوظ على هذا الجهاز؟")) return;
   try {
     localStorage.removeItem(STORAGE_KEY);
   } catch {}
@@ -1457,21 +1129,7 @@ function clearHistory() {
 }
 
 // ---------- الأحداث ----------
-document.querySelectorAll(".mode-card").forEach((card) => {
-  card.addEventListener("click", () => openSetup(card.dataset.mode));
-});
-el.btnSetupBack.addEventListener("click", () => showScreen("home"));
 el.btnStart.addEventListener("click", startSession);
-
-el.btnSettings.addEventListener("click", () => (el.settingsModal.hidden = false));
-el.btnCloseSettings.addEventListener("click", () => {
-  savePrefs();
-  el.settingsModal.hidden = true;
-});
-el.langSel.addEventListener("change", () => setLang(el.langSel.value));
-el.soundToggle.addEventListener("change", savePrefs);
-el.btnResetHistory.addEventListener("click", clearHistory);
-
 el.btnHistory.addEventListener("click", () => {
   renderHistory();
   el.historyModal.hidden = false;
@@ -1490,7 +1148,7 @@ el.btnPause.addEventListener("click", togglePause);
 el.btnResume.addEventListener("click", togglePause);
 el.btnStance.addEventListener("click", () => {
   stance = stance === "orthodox" ? "southpaw" : "orthodox";
-  showToast(stance === "orthodox" ? t("toast_left_lead") : t("toast_right_lead"));
+  showToast(stance === "orthodox" ? "اليد اليسرى أمامية" : "اليد اليمنى أمامية");
   updateHud();
 });
 el.btnCam.addEventListener("click", switchCamera);
@@ -1499,7 +1157,7 @@ el.btnRotate.addEventListener("click", () => {
   rot = (rot + 1) % 4;
   videoKey = "";
   updateLayout();
-  showToast(t("toast_rot", { d: rot * 90 }));
+  showToast(`التدوير: ${rot * 90}°`);
 });
 el.btnStop.addEventListener("click", () => {
   if (state === "calib" || state === "home") exitTraining();
@@ -1511,20 +1169,6 @@ el.btnAgain.addEventListener("click", async () => {
 });
 el.btnHome.addEventListener("click", exitTraining);
 
-// شاشة الدخول: الضغط عليها يفعّل الصوت ويشغّل نغمة الدخول
-el.splash.addEventListener("click", () => {
-  getAudio();
-  tone(440, 0.15, 0.2, "sine");
-  setTimeout(() => tone(660, 0.15, 0.2, "sine"), 150);
-  setTimeout(() => tone(880, 0.3, 0.25, "triangle"), 300);
-  el.splash.classList.add("hide");
-  setTimeout(() => (el.splash.hidden = true), 700);
-}, { once: true });
-
-// زر إظهار/إخفاء لوحة النتائج لترى الضربات في أسفل الشاشة
-el.btnStats.addEventListener("click", () => setStatsHidden(!statsHidden));
-el.btnLabels.addEventListener("click", () => setLabels(!labelsOn));
-
 window.addEventListener("resize", () => {
   if (state !== "home") resizeCanvas();
 });
@@ -1535,7 +1179,5 @@ document.addEventListener("visibilitychange", () => {
 });
 
 // ---------- التهيئة ----------
-applyPrefs();
-applyLang();
 if (!window.isSecureContext) el.banner.hidden = false;
 updateHud();
