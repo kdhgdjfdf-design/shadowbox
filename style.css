@@ -821,3 +821,61 @@ body.hide-stats .grid { display: none; }
 }
 .coach-card .mode-text b { font-size: 20px; font-weight: 900; }
 .coach-card .mode-text small { font-size: 13px; line-height: 1.5; opacity: 0.9; }
+
+/* ===== شريط الدقة ===== */
+.acc-track {
+  height: 10px;
+  border-radius: 999px;
+  background: #1f1f1f;
+  border: 1px solid var(--line);
+  overflow: hidden;
+  margin: 2px 0 12px;
+}
+.acc-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #7f0b14, #ff2d3d);
+  box-shadow: 0 0 12px rgba(225, 29, 46, 0.6);
+  transition: width 0.6s ease;
+}
+
+/* ===== أشرطة دقة اللكمات ===== */
+.pbar-card {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 12px 12px;
+  margin-bottom: 14px;
+}
+.pbar-row {
+  display: grid;
+  grid-template-columns: 84px 1fr 38px;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 0;
+}
+.pbar-label { font-size: 14px; color: #dcdcdc; font-weight: 700; }
+.pbar-track {
+  height: 16px;
+  display: flex;
+  border-radius: 999px;
+  background: #161616;
+  border: 1px solid #2a2a2a;
+  overflow: hidden;
+}
+.pbar-hit {
+  height: 100%;
+  background: linear-gradient(90deg, #7f0b14, #ff2d3d);
+  box-shadow: 0 0 10px rgba(225, 29, 46, 0.5);
+  transition: width 0.6s ease;
+}
+.pbar-miss {
+  height: 100%;
+  background: #4a4a4a;
+  transition: width 0.6s ease;
+}
+.pbar-val { font-size: 18px; font-weight: 900; color: #fff; text-align: center; font-variant-numeric: tabular-nums; }
+.pbar-legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-inline-end: 5px; vertical-align: middle; }
+.sw.hit { background: #ff2d3d; }
+.sw.miss { background: #4a4a4a; }

@@ -61,7 +61,7 @@ const T = {
   desc_sequence: ["اتبع الكومبو: نوع الضربة واليد والمكان والسرعة", "Follow the combo: punch type, hand, zone and speed"],
   name_dodge: ["مراوغة", "Dodge"],
   desc_dodge: ["حواجز تتجه نحو رأسك، تفاداها بالحركة (بدون لكمات)", "Barriers aim at your head. Slip them by moving (no punches)"],
-  btn_history: ["السجل والإحصائيات", "History & stats"],
+  btn_history: ["سجل التقدم الشخصي", "Personal progress"],
   btn_help: ["نصائح الإعداد", "Setup tips"],
   notice_privacy: ["🔒 <b>الخصوصية:</b> معالجة الفيديو تتم داخل متصفحك فقط. لا يتم رفع أي صورة من الكاميرا إلى أي خادم. السجل يُحفظ محليًا على جهازك.", "🔒 <b>Privacy:</b> video is processed only inside your browser. No camera image is uploaded to any server. History is saved locally on your device."],
   notice_accuracy: ["ℹ️ كشف اللكمات تقديري من كاميرا واحدة، وقد يخطئ مع الحركات السريعة جدًا أو الإضاءة الضعيفة. راجع «نصائح الإعداد» للحصول على أفضل دقة.", "ℹ️ Punch detection is an estimate from one camera and may miss very fast moves or poor lighting. See “Setup tips” for best accuracy."],
@@ -196,7 +196,17 @@ const T = {
   err_busy: ["الكاميرا مستخدمة من تطبيق آخر. أغلقه ثم أعد المحاولة.", "The camera is in use by another app. Close it and try again."],
   err_generic: ["تعذر تشغيل التطبيق: {msg}. تأكد من اتصال الإنترنت (لتحميل نموذج الرؤية) ومن فتح الصفحة عبر HTTPS.", "Couldn't start the app: {msg}. Check your internet connection (to load the pose model) and that the page is opened over HTTPS."],
   err_unknown: ["خطأ غير معروف", "unknown error"],
-  hist_title: ["السجل والإحصائيات", "History & stats"],
+  hist_title: ["سجل التقدم الشخصي", "Personal progress"],
+  hist_acc: ["دقة {a}%", "{a}% accuracy"],
+  prog_best_acc: ["أفضل دقة", "Best accuracy"],
+  prog_rounds: ["جولات مكتملة", "Rounds completed"],
+  res_acc: ["دقة اللكمات", "Punch accuracy"],
+  res_hit: ["إصابات", "Landed"],
+  res_miss: ["أخطاء", "Missed"],
+  res_acc_pct: ["نسبة الدقة", "Accuracy"],
+  res_avg_hit: ["متوسط وقت الإصابة", "Avg time to hit"],
+  res_rounds: ["جولات مكتملة", "Rounds completed"],
+  coach_tip_accuracy: ["دقتك في لمس الأهداف منخفضة. ركّز على لمس القفاز بقبضتك قبل زيادة السرعة.", "Your target accuracy is low. Focus on landing the glove with your fist before increasing speed."],
   hist_sessions: ["جلسة", "sessions"],
   hist_punches: ["لكمة إجمالًا", "total punches"],
   hist_minutes: ["دقيقة تدريب", "training minutes"],
@@ -206,6 +216,13 @@ const T = {
   hist_summary: ["{p}/د · {g} قفاز · {d} تفادٍ", "{p}/min · {g} gloves · {d} dodges"],
   btn_clear_history: ["حذف السجل", "Delete history"],
   hist_confirm: ["هل تريد حذف كل السجل المحفوظ على هذا الجهاز؟", "Delete all saved history on this device?"],
+  pb_title: ["دقة اللكمات حسب النوع", "Accuracy by punch type"],
+  pb_jab: ["جاب", "Jab"],
+  pb_cross: ["كروس", "Cross"],
+  pb_dodge: ["تفادٍ", "Dodges"],
+  pb_legend_hit: ["ناجح", "Success"],
+  pb_legend_miss: ["خطأ", "Miss"],
+  pb_overall: ["نسبة الدقة الإجمالية", "Overall accuracy"],
   coach_name: ["المدرّب الذكي", "AI Coach"],
   coach_desc: ["تحليل جلساتك واقتراح تمارين مناسبة", "Analyzes your sessions and suggests drills"],
   coach_title: ["المدرّب الذكي 🧠", "AI Coach 🧠"],
@@ -323,10 +340,14 @@ let toastTimer = 0;
 
 function freshStats() {
   return { total: 0, left: 0, right: 0, jab: 0, cross: 0, hits: 0,
-           targetHits: 0, targetMiss: 0, dodges: 0, pillarHits: 0, seqDone: 0, wrongHand: 0 };
+           targetHits: 0, targetMiss: 0, dodges: 0, pillarHits: 0, seqDone: 0, wrongHand: 0,
+           punchHit: 0, punchMiss: 0, missJab: 0, missCross: 0, hitJab: 0, hitCross: 0, reactSum: 0, reactN: 0, roundsDone: 0 };
 }
 function freshHand() {
-  return { armed: true, hist: [], lastPunch: -1e9, lastJudge: -1e9, contactUntil: 0 };
+  return { armed: true, hist: [], lastPunch: -1e9, lastJudge: -1e9, contactUntil: 0, ep: freshEpisode() };
+}
+function freshEpisode() {
+  return { active: false, start: 0, hit: false, targeted: false, type: "" };
 }
 function resetHands() {
   hands.left = freshHand();
@@ -336,6 +357,7 @@ function dropHandTracking() {
   for (const s of ["left", "right"]) {
     hands[s].hist = [];
     hands[s].armed = true;
+    hands[s].ep = freshEpisode();
   }
 }
 function pickLane() {
@@ -680,6 +702,7 @@ function endRound() {
   tone(880, 0.35, 0.25);
   targets = [];
   pillars = [];
+  stats.roundsDone++;
   if (currentRound >= totalRounds) {
     finishSession();
     return;
@@ -705,7 +728,7 @@ function finishSession() {
     date: new Date().toISOString(),
     mode,
     durationSec: Math.round(activeMs / 1000),
-    roundsDone: currentRound,
+    roundsDone: stats.roundsDone,
     stance,
     total: stats.total,
     left: stats.left,
@@ -719,6 +742,15 @@ function finishSession() {
     dodges: stats.dodges,
     pillarHits: stats.pillarHits,
     ppm: activeMs >= 5000 ? Math.round(stats.total / minutes) : 0,
+    punchHit: stats.punchHit,
+    punchMiss: stats.punchMiss,
+    missJab: stats.missJab,
+    missCross: stats.missCross,
+    hitJab: stats.hitJab,
+    hitCross: stats.hitCross,
+    accuracy: stats.punchHit + stats.punchMiss
+      ? Math.round((100 * stats.punchHit) / (stats.punchHit + stats.punchMiss)) : null,
+    avgHitMs: stats.reactN ? Math.round(stats.reactSum / stats.reactN) : null,
   };
   if (stats.total > 0 || activeMs > 5000) saveSession(sess);
 
@@ -835,6 +867,7 @@ function processHand(side, lm, now, canCount) {
   // نقطة القبضة (مفصل السبابة) هي التي تلمس القفاز، لا المعصم الذي يكون خلفها
   const K = lm[side === "left" ? 19 : 20];
   const fist = K && (K.visibility ?? 1) >= CFG.VIS_MIN ? K : W;
+  const hitsBefore = stats.targetHits;
 
   if (!S || !W ||
       (S.visibility ?? 1) < CFG.VIS_MIN ||
@@ -850,10 +883,11 @@ function processHand(side, lm, now, canCount) {
   const ext = Math.hypot(wx - S.x * vw, wy - S.y * vh) / sw;
   const zF = ((S.z - W.z) * vw) / sw;
 
-  H.hist.push({ t: now, x: wx, y: wy, zF });
+  H.hist.push({ t: now, x: wx, y: wy, zF, ext });
   while (H.hist.length > 1 && now - H.hist[0].t > CFG.WINDOW_MS) H.hist.shift();
 
   const o = H.hist[0];
+  const prev = H.hist[H.hist.length - 2];   // الإطار السابق مباشرة لتحديد اتجاه الحركة الآن
   const dt = (now - o.t) / 1000;
   let speed = 0;
   if (dt > 0.03) {
@@ -883,6 +917,36 @@ function processHand(side, lm, now, canCount) {
       H.lastPunch = now;
       H.lastJudge = now;
       registerPunch(side, fist.x, fist.y, now);
+    }
+  }
+
+  // ---- دقة اللكمات ----
+  // كل امتداد سريع للذراع = لكمة واحدة. إن لمست القفاز فهي إصابة، وإن انتهت دون لمس
+  // والقفاز كان حيًا فهي خطأ مرة واحدة. تحريك اليد البطيء لا يُحسب شيئًا.
+  const hitNow = stats.targetHits > hitsBefore;
+  const leadSide = stance === "orthodox" ? "left" : "right";
+  if (hitNow) {
+    stats.punchHit += stats.targetHits - hitsBefore;
+    if (side === leadSide) stats.hitJab++; else stats.hitCross++;
+  }
+  const E = H.ep;
+  if (canCount && mode !== "dodge") {
+    if (E.active) {
+      if (hitNow) E.hit = true;
+      if (targets.some((tg) => tg.state === "live")) E.targeted = true;
+      if (retracted || now - E.start > 900) {
+        if (!E.hit && E.targeted) {
+          stats.punchMiss++;
+          if (E.type === "jab") stats.missJab++; else stats.missCross++;
+        }
+        H.ep = freshEpisode();
+      }
+    } else if (extended && speed >= speedMinNow * 0.8 && prev && (zF > prev.zF || ext > prev.ext)) {
+      // اللكمة حركة للأمام فقط: الذراع تمتد أو تتجه نحو الكاميرا، لا تراجع السحب
+      const lead = stance === "orthodox" ? "left" : "right";
+      H.ep = { active: true, start: now, hit: hitNow,
+               targeted: targets.some((tg) => tg.state === "live"),
+               type: side === lead ? "jab" : "cross" };
     }
   }
 }
@@ -994,6 +1058,8 @@ function applyTargetHit(tgt, p) {
   tgt.state = "hit";
   tgt.age = 0;
   stats.targetHits++;
+  stats.reactSum += Math.max(0, activeMs - (tgt.born ?? activeMs));
+  stats.reactN++;
   nextTargetAt = activeMs + TARGET_GAP_MS;
   if (tgt.seqMode) advanceSeq();
   addFloater(t("fl_target"), p.x, p.y - 36, "#ffd166");
@@ -1133,9 +1199,9 @@ function updateGame(dt) {
     if (mode === "sequence") {
       if (!seq.length) newSequence();
       const st = seq[seqIdx];
-      targets.push({ state: "live", lane: st.lane, high: st.high, ms: st.ms, hand: st.hand, kind: st.kind, seqMode: true, judged: false, wrongCounted: false, k: 0, age: 0 });
+      targets.push({ state: "live", lane: st.lane, high: st.high, ms: st.ms, hand: st.hand, kind: st.kind, seqMode: true, judged: false, wrongCounted: false, k: 0, age: 0, born: activeMs });
     } else {
-      targets.push({ state: "live", lane: pickTargetLane(), ms: Math.round(TARGET_MS * speedMul), k: 0, age: 0 });
+      targets.push({ state: "live", lane: pickTargetLane(), ms: Math.round(TARGET_MS * speedMul), k: 0, age: 0, born: activeMs });
     }
   }
 
@@ -1433,6 +1499,39 @@ function setLabels(v) {
 }
 
 // ---------- النتيجة ----------
+function breakdownRows(rows) {
+  const max = Math.max(1, ...rows.map((r) => r.hit + r.miss));
+  return rows.map((r) => `
+      <div class="pbar-row">
+        <div class="pbar-label">${r.label}</div>
+        <div class="pbar-track">
+          <div class="pbar-hit" style="width:${(100 * r.hit) / max}%"></div>
+          <div class="pbar-miss" style="width:${(100 * r.miss) / max}%"></div>
+        </div>
+        <div class="pbar-val">${r.hit + r.miss}</div>
+      </div>`).join("");
+}
+function legendHTML() {
+  return `<div class="pbar-legend"><span><span class="sw hit"></span>${t("pb_legend_hit")}</span><span><span class="sw miss"></span>${t("pb_legend_miss")}</span></div>`;
+}
+function accuracyBlock(s) {
+  const hasAcc = typeof s.accuracy === "number";
+  const avg = s.avgHitMs ? (s.avgHitMs / 1000).toFixed(1) + " s" : "—";
+  const rows = [
+    { label: t("pb_jab"), hit: s.hitJab || 0, miss: s.missJab || 0 },
+    { label: t("pb_cross"), hit: s.hitCross || 0, miss: s.missCross || 0 },
+    { label: t("pb_dodge"), hit: s.dodges || 0, miss: s.pillarHits || 0 },
+  ];
+  return `
+    <h3 class="section-title">${t("res_acc")}</h3>
+    <div class="pbar-card">${breakdownRows(rows)}${legendHTML()}</div>
+    <div class="res-grid">
+      <div><b>${hasAcc ? s.accuracy + "%" : "—"}</b><small>${t("res_acc_pct")}</small></div>
+      <div><b>${avg}</b><small>${t("res_avg_hit")}</small></div>
+      <div><b>${s.roundsDone || 0}</b><small>${t("res_rounds")}</small></div>
+    </div>`;
+}
+
 function showResult(s) {
   const note = s.total === 0 ? t("res_none") : "";
   el.resultBody.innerHTML = `
@@ -1449,6 +1548,7 @@ function showResult(s) {
       <div><b>${s.jab}</b><small>${t("res_jab")}</small></div>
       <div><b>${s.cross}</b><small>${t("res_cross")}</small></div>
     </div>
+    ${accuracyBlock(s)}
     ${note ? `<p class="notice">${note}</p>` : ""}
     <p class="notice small">${t("res_note")}</p>`;
   el.resultOverlay.hidden = false;
@@ -1468,6 +1568,7 @@ function saveSession(s) {
   try {
     const arr = loadSessions();
     arr.unshift(s);
+    try { navigator.storage?.persist?.(); } catch {}   // يطلب من المتصفح عدم حذف البيانات تلقائيًا
     localStorage.setItem(STORAGE_KEY, JSON.stringify(arr.slice(0, 100)));
   } catch (e) {
     console.warn("تعذر حفظ الجلسة:", e);
@@ -1479,6 +1580,8 @@ function renderHistory() {
   const totalPunches = arr.reduce((sum, x) => sum + (x.total || 0), 0);
   const totalSec = arr.reduce((sum, x) => sum + (x.durationSec || 0), 0);
   const bestPpm = arr.reduce((m, x) => Math.max(m, x.ppm || 0), 0);
+  const bestAcc = arr.reduce((m, x) => Math.max(m, typeof x.accuracy === "number" ? x.accuracy : 0), 0);
+  const roundsTotal = arr.reduce((sum, x) => sum + (x.roundsDone || 0), 0);
 
   let html = `
     <div class="res-grid">
@@ -1486,6 +1589,8 @@ function renderHistory() {
       <div><b>${totalPunches}</b><small>${t("hist_punches")}</small></div>
       <div><b>${Math.round(totalSec / 60)}</b><small>${t("hist_minutes")}</small></div>
       <div><b>${bestPpm}</b><small>${t("hist_best")}</small></div>
+      <div><b>${bestAcc ? bestAcc + "%" : "—"}</b><small>${t("prog_best_acc")}</small></div>
+      <div><b>${roundsTotal}</b><small>${t("prog_rounds")}</small></div>
     </div>`;
 
   if (!arr.length) {
@@ -1499,7 +1604,7 @@ function renderHistory() {
         </div>
         <div class="hist-num">
           <b>${s.total}</b> ${t("unit_punch")}<br>
-          <small>${t("hist_summary", { p: s.ppm, g: s.targetHits || 0, d: s.dodges || 0 })}</small>
+          <small>${t("hist_summary", { p: s.ppm, g: s.targetHits || 0, d: s.dodges || 0 })}${typeof s.accuracy === "number" ? " · " + t("hist_acc", { a: s.accuracy }) : ""}</small>
         </div>
       </div>`).join("");
   }
@@ -1526,24 +1631,33 @@ function analyzeSessions(arr) {
   if (dodgePct !== null && dodgePct < 50) tips.push(t("coach_tip_dodge"));
   if (punches >= 20 && crosses / punches < 0.25) tips.push(t("coach_tip_cross"));
   if (wrong >= 3) tips.push(t("coach_tip_sequence"));
+  const accs = arr.filter((x) => typeof x.accuracy === "number").map((x) => x.accuracy);
+  if (accs.length && accs.reduce((a, b) => a + b, 0) / accs.length < 50) tips.push(t("coach_tip_accuracy"));
   if (arr.length >= 2 && (arr[0].ppm || 0) > (arr[1].ppm || 0)) tips.push(t("coach_tip_improving"));
   if (!tips.length) tips.push(t("coach_tip_good"));
   return { sessions: arr.length, avgPpm, glovePct, dodgePct, tips };
 }
 
 function renderCoach() {
-  const a = analyzeSessions(loadSessions());
+  const arr = loadSessions();
+  const a = analyzeSessions(arr);
   if (!a) {
     el.coachBody.innerHTML = `<p class="notice">${t("coach_empty")}</p><p class="notice small">${t("coach_note")}</p>`;
     return;
   }
+  const sum = (k) => arr.reduce((acc, x) => acc + (Number(x[k]) || 0), 0);
+  const rows = [
+    { label: t("pb_jab"), hit: sum("hitJab"), miss: sum("missJab") },
+    { label: t("pb_cross"), hit: sum("hitCross"), miss: sum("missCross") },
+    { label: t("pb_dodge"), hit: sum("dodges"), miss: sum("pillarHits") },
+  ];
+  const landed = rows[0].hit + rows[1].hit;
+  const thrown = landed + rows[0].miss + rows[1].miss;
+  const overall = thrown ? Math.round((100 * landed) / thrown) + "%" : "—";
   el.coachBody.innerHTML = `
-    <div class="res-grid">
-      <div><b>${a.sessions}</b><small>${t("coach_stat_sessions")}</small></div>
-      <div><b>${a.avgPpm}</b><small>${t("coach_stat_ppm")}</small></div>
-      <div><b>${a.glovePct === null ? "—" : a.glovePct + "%"}</b><small>${t("coach_stat_glove")}</small></div>
-      <div><b>${a.dodgePct === null ? "—" : a.dodgePct + "%"}</b><small>${t("coach_stat_dodge")}</small></div>
-    </div>
+    <p class="notice small">${t("coach_stat_sessions")}: ${a.sessions} · ${t("pb_overall")}: ${overall}</p>
+    <h3 class="section-title">${t("pb_title")}</h3>
+    <div class="pbar-card">${breakdownRows(rows)}${legendHTML()}</div>
     <h3 class="section-title">${t("coach_tips_title")}</h3>
     <ul class="tips">${a.tips.map((x) => `<li>${x}</li>`).join("")}</ul>
     <p class="notice small">${t("coach_note")}</p>`;
