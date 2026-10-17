@@ -349,6 +349,16 @@
     <div class="sheet wide">
       <h2 data-i18n="coach_title">المدرّب الذكي 🧠</h2>
       <div id="coachBody"></div>
+      <section class="coach-chat" aria-label="AI Coach chat">
+        <h3 class="section-title" data-i18n="coach_chat_title">اسأل المدرّب الذكي</h3>
+        <div id="coachChatStatus" class="notice small" role="status" data-i18n="coach_chat_unconfigured">المحادثة تحتاج ربط الخادم المركزي أولًا. التحليل المحلي يعمل كالمعتاد.</div>
+        <div id="coachChatMessages" class="coach-chat-messages" aria-live="polite"></div>
+        <form id="coachChatForm" class="coach-chat-form">
+          <textarea id="coachChatInput" rows="2" maxlength="1000" data-i18n-placeholder="coach_chat_placeholder" placeholder="اسأل عن الكومبوهات أو الدفاع أو حركة القدمين..."></textarea>
+          <button id="coachChatSend" type="submit" class="btn primary" data-i18n="coach_chat_send">إرسال</button>
+        </form>
+        <p class="notice small" data-i18n="coach_chat_privacy">لا ترسل معلومات شخصية. تُرسل رسالتك وملخص أرقام التدريب فقط إلى الخادم عند تفعيل الخدمة؛ لا تُرسل صور الكاميرا.</p>
+      </section>
       <button id="btnCloseCoach" class="btn primary big" data-i18n="btn_close">إغلاق</button>
     </div>
   </div>
