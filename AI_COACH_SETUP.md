@@ -49,13 +49,13 @@ It accepts a POST JSON body like:
 A successful response contains `reply` and `sources`. If Gemini rejects the request, the Worker returns a short error message with a code such as `GEMINI_LIMIT`, `GEMINI_AUTH`, or `GEMINI_MODEL`. Check the Worker's logs and AI Studio usage if an error remains.
 
 ### 4. Connect the existing app
-Only after the Worker is deployed, set `COACH_API_URL` near the top of `script.js` to the base URL only, for example:
+The testing branch currently points `COACH_API_URL` at the project's previously configured Worker URL:
 
 ```js
-const COACH_API_URL = "https://YOUR-WORKER.workers.dev";
+const COACH_API_URL = "https://shadowbox-coach.kdhgdjfdf.workers.dev";
 ```
 
-Do not add `/api/chat` to this variable; the frontend appends that path itself. Commit this frontend change to the testing branch, not `main`.
+Deploy the Gemini version of `worker/ai-coach.js` to that Worker before testing. If this is not the Worker URL you own or deployed, replace it with your actual Worker base URL. Do not add `/api/chat` to this variable; the frontend appends that path itself. Keep this change on the testing branch, not `main`.
 
 ### 5. Verify
 - Ask a simple boxing question in Arabic.
