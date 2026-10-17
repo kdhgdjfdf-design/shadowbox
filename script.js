@@ -1614,6 +1614,13 @@ function renderHistory() {
       <div><b>${roundsTotal}</b><small>${t("prog_rounds")}</small></div>
     </div>`;
 
+  if (arr.length) {
+    const { rows, overall } = typeRows(arr);
+    html += `<h3 class="section-title">${t("pb_title")}</h3>
+      <div class="pbar-card">${breakdownRows(rows)}${legendHTML()}</div>
+      <p class="notice small">${t("pb_overall")}: ${overall}</p>`;
+  }
+
   if (!arr.length) {
     html += `<p class="notice">${t("hist_empty")}</p>`;
   } else {
@@ -1659,13 +1666,8 @@ function analyzeSessions(arr) {
   return { sessions: arr.length, avgPpm, glovePct, dodgePct, tips };
 }
 
-function renderCoach() {
-  const arr = loadSessions();
-  const a = analyzeSessions(arr);
-  if (!a) {
-    el.coachBody.innerHTML = `<p class="notice">${t("coach_empty")}</p><p class="notice small">${t("coach_note")}</p>`;
-    return;
-  }
+// أرقام الأنواع (جاب/كروس/تفادٍ) تُعرض في سجل النشاط
+function typeRows(arr) {
   const sum = (k) => arr.reduce((acc, x) => acc + (Number(x[k]) || 0), 0);
   const rows = [
     { label: t("pb_jab"), hit: sum("hitJab"), miss: sum("missJab") },
@@ -1675,10 +1677,16 @@ function renderCoach() {
   const landed = rows[0].hit + rows[1].hit;
   const thrown = landed + rows[0].miss + rows[1].miss;
   const overall = thrown ? Math.round((100 * landed) / thrown) + "%" : "—";
+  return { rows, overall };
+}
+
+function renderCoach() {
+  const a = analyzeSessions(loadSessions());
+  if (!a) {
+    el.coachBody.innerHTML = `<p class="notice">${t("coach_empty")}</p><p class="notice small">${t("coach_note")}</p>`;
+    return;
+  }
   el.coachBody.innerHTML = `
-    <p class="notice small">${t("coach_stat_sessions")}: ${a.sessions} · ${t("pb_overall")}: ${overall}</p>
-    <h3 class="section-title">${t("pb_title")}</h3>
-    <div class="pbar-card">${breakdownRows(rows)}${legendHTML()}</div>
     <h3 class="section-title">${t("coach_tips_title")}</h3>
     <ul class="tips">${a.tips.map((x) => `<li>${x}</li>`).join("")}</ul>
     <p class="notice small">${t("coach_note")}</p>`;
