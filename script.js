@@ -906,6 +906,9 @@ function processHand(side, lm, now, canCount) {
       poseSW < 2) {
     H.armed = true;
     H.hist = [];
+    H.lastFistScreen = null;
+    H.lastExt = null;
+    H.lastZF = null;
     return;
   }
 
