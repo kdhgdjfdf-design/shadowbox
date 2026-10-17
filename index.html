@@ -6,14 +6,14 @@
   <meta name="theme-color" content="#0a0a0a" />
   <meta name="description" content="ShadowBox Nox - shadow boxing trainer with your phone camera. تدريب الملاكمة الافتراضي بكاميرا هاتفك." />
   <title>ShadowBox Nox 🥊</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=fix2" />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
 </head>
 <body>
 
   <!-- ============ شاشة الدخول ============ -->
-  <div id="splash" class="splash">
+  <div id="splash" class="splash" role="button" tabindex="0" aria-label="اضغط للدخول">
     <div class="splash-logo">🥊</div>
     <div class="splash-name">ShadowBox <span>Nox</span></div>
     <p class="splash-hint" data-i18n="splash_hint">اضغط للدخول</p>
@@ -422,6 +422,22 @@
     </div>
   </div>
 
-  <script type="module" src="script.js"></script>
+  <script>
+    // Fallback: لا تترك شاشة الدخول عالقة إذا تأخر ملف التطبيق أو لم يُحمّل.
+    (() => {
+      const splash = document.getElementById("splash");
+      if (!splash) return;
+      const enter = () => {
+        splash.classList.add("hide");
+        splash.setAttribute("aria-hidden", "true");
+        setTimeout(() => { splash.hidden = true; }, 350);
+      };
+      splash.addEventListener("click", enter, { once: true });
+      splash.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); enter(); }
+      }, { once: true });
+    })();
+  </script>
+  <script type="module" src="script.js?v=fix2"></script>
 </body>
 </html>
