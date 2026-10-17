@@ -1797,13 +1797,23 @@ el.coachChatForm.addEventListener("submit", async (event) => {
         } : null
       })
     });
-    if (!response.ok) throw new Error("HTTP " + response.status);
-    const data = await response.json();
-    if (!data || typeof data.reply !== "string" || !data.reply.trim()) throw new Error("Invalid response");
-    addCoachMessage("assistant", data.reply.trim());
+    let data = null;
+    try {
+      data = await response.json();
+    } catch {
+      throw new Error("الخادم أعاد ردًا غير مفهوم (HTTP " + response.status + ").");
+    }
+    if (!response.ok) {
+      throw new Error(typeof data?.error === "string" ? data.error : "فشل الطلب (HTTP " + response.status + ").");
+    }
+    if (!data || typeof data.reply !== "string" || !data.reply.trim()) {
+      throw new Error(typeof data?.error === "string" ? data.error : "لم يصل رد من المدرب.");
+    }
+    addCoachMessage("assistant", data.reply.trim(), data.sources);
     el.coachChatStatus.textContent = "";
   } catch (error) {
-    el.coachChatStatus.textContent = t("coach_chat_error");
+    const detail = typeof error?.message === "string" ? error.message : "";
+    el.coachChatStatus.textContent = detail ? "تعذّر الرد: " + detail : t("coach_chat_error");
   } finally {
     el.coachChatSend.disabled = false;
     el.coachChatInput.focus();
