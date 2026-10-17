@@ -15,7 +15,7 @@ const MODEL_URL =
 const STORAGE_KEY = "shadowbox_sessions_v1";
 const PREFS_KEY = "shadowbox_prefs_v1";
 // Set this to the deployed Cloudflare Worker URL after backend setup. Never put API secrets here.
-const COACH_API_URL = "";
+const COACH_API_URL = "https://shadowbox-coach.kdhgdjfdf.workers.dev";
 
 // ---------- ثوابت الكشف عن اللكمات (قابلة للضبط) ----------
 const CFG = {
