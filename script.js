@@ -1883,116 +1883,203 @@ function localCoachReply(question) {
   return "أقدر أساعدك بأساسيات الملاكمة: الجاب، الكروس، الحراسة، المراوغة، حركة القدمين والكومبوهات. جرّب أحد الأزرار المقترحة أو اسألني سؤالًا محددًا. ملاحظة: هذه إجابة إرشادية محلية وليست اتصالًا بنموذج ذكاء اصطناعي مباشر.";
 }
 
-/* ---------- مجسّم ملاكم ثلاثي الأبعاد باستخدام Three.js ---------- */
+/* ---------- شخصية ملاكم بشرية ثلاثية الأبعاد ---------- */
 let boxer3d = null;
-let boxer3dMove = "jab";
 let boxer3dFrame = 0;
 let boxer3dResize = null;
+let boxer3dMove = "jab";
+
 async function initBoxer3D() {
   const host = document.getElementById("boxer3dStage");
   const status = document.getElementById("boxer3dStatus");
   if (!host) return;
   if (boxer3d) { resizeBoxer3D(); return; }
+
   try {
     const THREE = await import("https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js");
+    const { GLTFLoader } = await import("https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js");
     const scene = new THREE.Scene();
     scene.background = new THREE.Color("#111016");
-    scene.fog = new THREE.Fog("#111016", 5, 12);
-    const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100);
-    camera.position.set(0, 1.65, 6.8);
+    scene.fog = new THREE.Fog("#111016", 7, 15);
+
+    const camera = new THREE.PerspectiveCamera(31, 1, 0.1, 100);
+    camera.position.set(0, 1.15, 5.8);
+    camera.lookAt(0, 0.15, 0);
+
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.6));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     renderer.setSize(host.clientWidth || 320, host.clientHeight || 300);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
     host.insertBefore(renderer.domElement, host.firstChild);
+
+    scene.add(new THREE.HemisphereLight(0xdce6ff, 0x241018, 2.2));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.6);
+    keyLight.position.set(-3, 5, 4);
+    keyLight.castShadow = true;
+    scene.add(keyLight);
+    const rim = new THREE.PointLight(0x7865ff, 18, 9);
+    rim.position.set(2, 2.5, -1);
+    scene.add(rim);
+
+    const floor = new THREE.Mesh(
+      new THREE.CircleGeometry(2.2, 48),
+      new THREE.MeshStandardMaterial({ color: 0x1b1a24, roughness: 0.92 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -1.31;
+    floor.scale.set(1.1, 0.7, 1);
+    scene.add(floor);
+    const grid = new THREE.GridHelper(5, 18, 0x3b3447, 0x292430);
+    grid.position.y = -1.3;
+    scene.add(grid);
+
+    if (status) status.textContent = "جارٍ تحميل شخصية الملاكم البشرية…";
+    const loader = new GLTFLoader();
+    const gltf = await loader.loadAsync("https://threejs.org/examples/models/gltf/Xbot.glb");
+    const avatar = gltf.scene;
+    avatar.name = "ShadowBoxHumanBoxer";
+    avatar.traverse((obj) => {
+      if (obj.isMesh) {
+        obj.castShadow = true;
+        obj.receiveShadow = true;
+        if (obj.material) {
+          obj.material.needsUpdate = true;
+        }
+      }
+    });
+
+    const initialBounds = new THREE.Box3().setFromObject(avatar);
+    const modelHeight = Math.max(0.1, initialBounds.max.y - initialBounds.min.y);
+    avatar.scale.setScalar(2.55 / modelHeight);
+    const scaledBounds = new THREE.Box3().setFromObject(avatar);
+    avatar.position.y = -1.3 - scaledBounds.min.y;
+    avatar.rotation.y = Math.PI;
+    scene.add(avatar);
+
+    const findBone = (...parts) => {
+      let found = null;
+      avatar.traverse((obj) => {
+        if (found || !obj.isBone) return;
+        const n = obj.name.toLowerCase().replace(/[^a-z]/g, "");
+        if (parts.every((p) => n.includes(p))) found = obj;
+      });
+      return found;
+    };
+    const leftArm = findBone("leftarm");
+    const rightArm = findBone("rightarm");
+    const leftForeArm = findBone("leftforearm") || findBone("leftfore");
+    const rightForeArm = findBone("rightforearm") || findBone("rightfore");
+    const leftHand = findBone("lefthand");
+    const rightHand = findBone("righthand");
+    const spine = findBone("spine");
+    const hips = findBone("hips");
+
+    const gloveMaterial = new THREE.MeshStandardMaterial({
+      color: 0xe11d2e, roughness: 0.42, metalness: 0.04
+    });
+    const addGlove = (hand) => {
+      if (!hand) return;
+      const glove = new THREE.Mesh(new THREE.SphereGeometry(0.105, 20, 16), gloveMaterial);
+      glove.scale.set(1.05, 0.9, 1.25);
+      glove.position.set(0, 0, 0.075);
+      glove.castShadow = true;
+      hand.add(glove);
+    };
+    addGlove(leftHand);
+    addGlove(rightHand);
+
+    const mixer = new THREE.AnimationMixer(avatar);
+    const idleClip = gltf.animations.find((clip) => /idle/i.test(clip.name)) || gltf.animations[0];
+    if (idleClip) {
+      const idle = mixer.clipAction(idleClip);
+      idle.play();
+    }
+    const baseRotations = new Map();
+    [leftArm, rightArm, leftForeArm, rightForeArm, spine, hips].filter(Boolean).forEach((bone) => {
+      baseRotations.set(bone, bone.rotation.clone());
+    });
+
+    boxer3d = { THREE, scene, camera, renderer, host, avatar, mixer, leftArm, rightArm,
+      leftForeArm, rightForeArm, spine, hips, baseRotations, clock: new THREE.Clock() };
     if (status) status.remove();
 
-    scene.add(new THREE.HemisphereLight(0xcad9ff, 0x241018, 2.1));
-    const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
-    keyLight.position.set(-3, 5, 5); keyLight.castShadow = true; scene.add(keyLight);
-    const rim = new THREE.PointLight(0x6c7dff, 22, 8); rim.position.set(2, 2.6, -1); scene.add(rim);
-    const floor = new THREE.Mesh(new THREE.CircleGeometry(2.2, 48), new THREE.MeshStandardMaterial({ color: 0x1b1a24, roughness: 0.92 }));
-    floor.rotation.x = -Math.PI / 2; floor.position.y = -1.32; floor.scale.set(1.1, .7, 1); scene.add(floor);
-    const grid = new THREE.GridHelper(5, 18, 0x3b3447, 0x292430); grid.position.y = -1.3; scene.add(grid);
+    if (boxer3dResize) window.removeEventListener("resize", boxer3dResize);
+    boxer3dResize = () => resizeBoxer3D();
+    window.addEventListener("resize", boxer3dResize);
 
-    const avatar = new THREE.Group(); scene.add(avatar);
-    const skin = new THREE.MeshStandardMaterial({color:0xb87958, roughness:.72});
-    const suit = new THREE.MeshStandardMaterial({color:0x242632, roughness:.58, metalness:.12});
-    const trim = new THREE.MeshStandardMaterial({color:0xe11d2e, roughness:.38, metalness:.12});
-    const dark = new THREE.MeshStandardMaterial({color:0x11121a, roughness:.8});
-    function ball(parent, x,y,z, sx,sy,sz, material) {
-      const m = new THREE.Mesh(new THREE.SphereGeometry(1,18,14),material);
-      m.position.set(x,y,z); m.scale.set(sx,sy,sz); m.castShadow=true; parent.add(m); return m;
-    }
-    function link(parent,a,b,r1,r2,material) {
-      const va=new THREE.Vector3(...a), vb=new THREE.Vector3(...b), d=new THREE.Vector3().subVectors(vb,va);
-      const m=new THREE.Mesh(new THREE.CylinderGeometry(r2,r1,d.length(),12),material);
-      m.position.copy(va).add(vb).multiplyScalar(.5);
-      m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize()); m.castShadow=true; parent.add(m); return m;
-    }
-    // torso and head
-    ball(avatar,0,.15,0,.42,.65,.25,suit);
-    ball(avatar,0,.65,.015,.37,.17,.24,suit);
-    ball(avatar,0,.99,.02,.19,.23,.19,skin);
-    ball(avatar,0,1.24,.04,.245,.27,.22,skin);
-    ball(avatar,0,1.31,.22,.245,.11,.06,dark);
-    ball(avatar,-.1,1.47,.03,.08,.045,.06,dark);
-    ball(avatar,.1,1.47,.03,.08,.045,.06,dark);
-    // shorts / legs
-    ball(avatar,0,-.42,0,.38,.22,.24,dark);
-    link(avatar,[-.2,-.48,0],[-.28,-.95,.03],.14,.105,suit);
-    link(avatar,[-.28,-.95,.03],[-.34,-1.24,.12],.105,.075,skin);
-    link(avatar,[.2,-.48,0],[.28,-.95,.03],.14,.105,suit);
-    link(avatar,[.28,-.95,.03],[.34,-1.24,.12],.105,.075,skin);
-    ball(avatar,-.35,-1.25,.2,.18,.09,.28,dark); ball(avatar,.35,-1.25,.2,.18,.09,.28,dark);
-    // shoulder pivot groups let the hands visibly move in 3D.
-    function arm(side) {
-      const pivot=new THREE.Group(); pivot.position.set(side*.34,.56,.02); avatar.add(pivot);
-      ball(pivot,0,0,0,.14,.14,.14,skin);
-      link(pivot,[0,0,0],[side*.11,-.22,.05],.105,.085,skin);
-      ball(pivot,side*.11,-.22,.05,.09,.09,.09,skin);
-      link(pivot,[side*.11,-.22,.05],[side*.06,-.36,.27],.085,.075,skin);
-      const glove=ball(pivot,side*.06,-.4,.31,.16,.14,.16,trim);
-      ball(pivot,side*.06,-.4,.44,.09,.085,.07,trim);
-      return {pivot,glove,side};
-    }
-    const left=arm(-1), right=arm(1);
-    const waist=avatar.position; avatar.rotation.y=-.12;
-    boxer3d={THREE,scene,camera,renderer,host,avatar,left,right,waist,clock:new THREE.Clock()};
-    boxer3dResize=()=>resizeBoxer3D();
-    window.addEventListener("resize",boxer3dResize);
-    document.querySelectorAll("[data-move3d]").forEach(btn=>btn.addEventListener("click",()=>{
-      boxer3dMove=btn.dataset.move3d;
-      document.querySelectorAll("[data-move3d]").forEach(b=>b.classList.toggle("active",b===btn));
-      const hints={jab:"مدّ اليد الأمامية للأمام ثم أعدها بسرعة إلى الحراسة.",cross:"دوّر الجذع قليلًا ومدّ اليد الخلفية للأمام ثم ارجع للحراسة.",guard:"ارفع القفازين قرب الخدين وحافظ على المرفقين قريبين من الجسم.",dodge:"حرّك الجذع والرأس حركة صغيرة إلى الجانب مع ثني الركبتين."};
-      const hint=document.getElementById("boxer3dHint"); if(hint) hint.textContent=hints[boxer3dMove];
-    }));
-    const animate=()=>{
-      if(!boxer3d)return;
-      boxer3dFrame=requestAnimationFrame(animate);
-      const t=boxer3d.clock.getElapsedTime(), phase=(t%1.65)/1.65;
-      const punch=phase<.45?Math.sin((phase/.45)*Math.PI):0;
-      left.pivot.rotation.set(0,0,0); right.pivot.rotation.set(0,0,0);
-      avatar.rotation.y=-.12;
-      if(boxer3dMove==="jab"){left.pivot.rotation.y=-.85*punch;left.pivot.rotation.x=-.75*punch;left.pivot.rotation.z=-.35*punch;avatar.rotation.y=-.12-.12*punch;}
-      if(boxer3dMove==="cross"){right.pivot.rotation.y=-.95*punch;right.pivot.rotation.x=-.8*punch;right.pivot.rotation.z=.45*punch;avatar.rotation.y=-.12+.18*punch;}
-      if(boxer3dMove==="guard"){left.pivot.rotation.z=-.38;right.pivot.rotation.z=.38;left.pivot.rotation.x=-.25;right.pivot.rotation.x=-.25;}
-      if(boxer3dMove==="dodge"){avatar.position.x=Math.sin(t*2.6)*.22;avatar.rotation.z=Math.sin(t*2.6)*.06;}
-      else {avatar.position.x=0;avatar.rotation.z=0;}
-      renderer.render(scene,camera);
+    document.querySelectorAll("[data-move3d]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        boxer3dMove = btn.dataset.move3d || "jab";
+        document.querySelectorAll("[data-move3d]").forEach((b) => b.classList.toggle("active", b === btn));
+        const hints = {
+          jab: "الجاب: مدّ اليد الأمامية للأمام بسرعة، وأعدها مباشرة إلى الحراسة.",
+          cross: "الكروس: لفّ الجذع برفق ومدّ اليد الخلفية، ثم ارجع إلى وضع الحراسة.",
+          guard: "الحراسة: ارفع القفازين قرب الخدين وأبقِ المرفقين قريبين من الجسم.",
+          dodge: "المراوغة: اثنِ الركبتين قليلًا وحرّك الرأس والجذع إلى الجانب."
+        };
+        const hint = document.getElementById("boxer3dHint");
+        if (hint) hint.textContent = hints[boxer3dMove] || hints.jab;
+      });
+    });
+
+    const animate = () => {
+      if (!boxer3d) return;
+      boxer3dFrame = requestAnimationFrame(animate);
+      const t = boxer3d.clock.getElapsedTime();
+      const phase = (t % 1.55) / 1.55;
+      const punch = phase < 0.48 ? Math.sin((phase / 0.48) * Math.PI) : 0;
+
+      boxer3d.mixer.update(Math.min(0.04, boxer3d.clock.getDelta()));
+      const b = boxer3d;
+      const resetBone = (bone) => {
+        if (bone && b.baseRotations.has(bone)) bone.rotation.copy(b.baseRotations.get(bone));
+      };
+      [b.leftArm, b.rightArm, b.leftForeArm, b.rightForeArm, b.spine, b.hips].forEach(resetBone);
+
+      // Subtle boxing guard, then the selected movement. The full rig remains skinned.
+      if (b.leftArm) b.leftArm.rotation.x -= boxer3dMove === "guard" ? 0.7 : 0.38;
+      if (b.rightArm) b.rightArm.rotation.x -= boxer3dMove === "guard" ? 0.7 : 0.38;
+      if (b.leftForeArm) b.leftForeArm.rotation.x -= 0.25;
+      if (b.rightForeArm) b.rightForeArm.rotation.x -= 0.25;
+
+      if (boxer3dMove === "jab" && b.leftArm) {
+        b.leftArm.rotation.x -= 0.72 * punch;
+        if (b.leftForeArm) b.leftForeArm.rotation.x -= 0.18 * punch;
+        b.avatar.rotation.y = Math.PI - 0.08 - 0.12 * punch;
+      } else if (boxer3dMove === "cross" && b.rightArm) {
+        b.rightArm.rotation.x -= 0.78 * punch;
+        if (b.rightForeArm) b.rightForeArm.rotation.x -= 0.16 * punch;
+        b.avatar.rotation.y = Math.PI + 0.08 + 0.14 * punch;
+      } else if (boxer3dMove === "guard") {
+        b.avatar.rotation.y = Math.PI - 0.08;
+      } else if (boxer3dMove === "dodge") {
+        b.avatar.position.x = Math.sin(t * 2.5) * 0.16;
+        b.avatar.rotation.z = Math.sin(t * 2.5) * 0.055;
+        if (b.spine) b.spine.rotation.z += Math.sin(t * 2.5) * 0.08;
+      }
+      if (boxer3dMove !== "dodge") {
+        b.avatar.position.x = 0;
+        b.avatar.rotation.z = 0;
+      }
+      if (boxer3dMove !== "jab" && boxer3dMove !== "cross") b.avatar.rotation.y = Math.PI - 0.08;
+      renderer.render(scene, camera);
     };
     animate();
   } catch (err) {
-    if (status) status.textContent="تعذّر تحميل المجسّم ثلاثي الأبعاد. تأكد من اتصال الإنترنت ثم أعد فتح قسم التعلّم.";
-    console.error("3D boxing demo failed to load",err);
+    if (status) status.textContent = "تعذّر تحميل الشخصية البشرية. تأكد من اتصال الإنترنت ثم أعد فتح قسم التعلّم.";
+    console.error("3D human boxer failed to load", err);
   }
 }
-function resizeBoxer3D(){
-  if(!boxer3d)return;
-  const w=boxer3d.host.clientWidth||320,h=boxer3d.host.clientHeight||300;
-  boxer3d.camera.aspect=w/h;boxer3d.camera.updateProjectionMatrix();boxer3d.renderer.setSize(w,h);
+
+function resizeBoxer3D() {
+  if (!boxer3d) return;
+  const w = boxer3d.host.clientWidth || 320;
+  const h = boxer3d.host.clientHeight || 300;
+  boxer3d.camera.aspect = w / h;
+  boxer3d.camera.updateProjectionMatrix();
+  boxer3d.renderer.setSize(w, h);
 }
 
 // ---------- التهيئة ----------
