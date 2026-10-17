@@ -1751,6 +1751,10 @@ el.btnCoach.addEventListener("click", () => {
   if (!COACH_API_URL) el.coachChatStatus.textContent = t("coach_chat_unconfigured");
 });
 el.btnCloseCoach.addEventListener("click", () => (el.coachModal.hidden = true));
+document.querySelectorAll("[data-coach-prompt]").forEach(button => button.addEventListener("click", () => {
+  el.coachChatInput.value = button.dataset.coachPrompt || "";
+  el.coachChatForm.requestSubmit();
+}));
 
 function addCoachMessage(role, text) {
   const item = document.createElement("div");
@@ -1764,14 +1768,18 @@ el.coachChatForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const message = el.coachChatInput.value.trim();
   if (!message) return;
-  if (!COACH_API_URL) {
-    el.coachChatStatus.textContent = t("coach_chat_unconfigured");
-    return;
-  }
   if (message.length > 1000) return;
   addCoachMessage("user", message);
   el.coachChatInput.value = "";
   el.coachChatSend.disabled = true;
+  if (!COACH_API_URL) {
+    el.coachChatStatus.textContent = "وضع المساعدة المحلي · لا يوجد اتصال بخادم ذكاء اصطناعي خارجي";
+    await new Promise(resolve => setTimeout(resolve, 250));
+    addCoachMessage("assistant", localCoachReply(message));
+    el.coachChatSend.disabled = false;
+    el.coachChatInput.focus();
+    return;
+  }
   el.coachChatStatus.textContent = t("coach_chat_thinking");
   const analysis = analyzeSessions(loadSessions());
   try {
@@ -1804,7 +1812,7 @@ el.coachChatForm.addEventListener("submit", async (event) => {
 
 // الأقسام الأربعة في الرئيسية
 el.btnTraining.addEventListener("click", () => showScreen("trainMenu"));
-el.btnLearn.addEventListener("click", () => showScreen("learn"));
+el.btnLearn.addEventListener("click", () => { showScreen("learn"); initBoxer3D(); });
 el.btnTrainBack.addEventListener("click", () => showScreen("home"));
 el.btnLearnBack.addEventListener("click", () => showScreen("home"));
 
@@ -1860,6 +1868,132 @@ window.addEventListener("resize", () => {
 document.addEventListener("visibilitychange", () => {
   if (document.hidden && state === "round") setState("paused");
 });
+
+
+/* ---------- مدرّب محلي: أجوبة إرشادية عند عدم ربط خادم AI ---------- */
+function localCoachReply(question) {
+  const q = question.toLowerCase();
+  if (/\b(jab|جاب)\b|الجاب/.test(q)) return "الجاب هي لكمة اليد الأمامية: ابدأ من وضعية الحراسة، مدّ الذراع بخط مستقيم مع إبقاء الكتف مرتفعًا لحماية الذقن، ثم أعد اليد مباشرة إلى الحراسة. ابدأ ببطء وبدون قوة زائدة.";
+  if (/\b(cross|كروس)\b|الكروس/.test(q)) return "الكروس لكمة اليد الخلفية. ادفع الأرض بقدمك الخلفية، ودوّر الورك والكتف معًا، ثم مدّ الذراع بخط مستقيم وأعدها إلى الحراسة. لا تلفّ الركبة بعنف.";
+  if (/كومبو|combo|تسلسل/.test(q)) return "جرّب هذا التسلسل للمبتدئين: 1) جاب باليد الأمامية، 2) كروس باليد الخلفية، 3) خطوة صغيرة للخلف ثم عُد للحراسة. نفّذه ببطء أولًا وركّز على التوازن والدقة.";
+  if (/قدم|footwork|خطو/.test(q)) return "حرّك القدم الأقرب لاتجاهك أولًا، ثم اتبعها بالقدم الأخرى مع الحفاظ على المسافة نفسها تقريبًا بين القدمين. لا تجمع القدمين ولا تجعلهما تتقاطعان، وحافظ على الركبتين مرتاحتين.";
+  if (/دفاع|حراس|guard/.test(q)) return "ارفع اليدين قرب الخدين، واجعل المرفقين قريبين من الجسم والذقن منخفضًا قليلًا. بعد كل لكمة أعد يدك فورًا. تدرّب ببطء أمام مساحة خالية.";
+  if (/مراوغ|تفاد|dodge|weav/.test(q)) return "للمراوغة الآمنة: اثنِ الركبتين قليلًا وحرّك الرأس والجذع حركة صغيرة من الركبتين والورك، لا تنحنِ بقوة من الخصر. ابدأ دون شريك أو ضربات قادمة.";
+  if (/تعب|لياق|نفس|stamina/.test(q)) return "ابدأ بجولات قصيرة وبسرعة يمكنك التحكم بها، وخذ راحة عند الحاجة. زد المدة تدريجيًا، وتوقف إذا شعرت بألم أو دوخة. الجودة والتوازن أهم من السرعة.";
+  return "أقدر أساعدك بأساسيات الملاكمة: الجاب، الكروس، الحراسة، المراوغة، حركة القدمين والكومبوهات. جرّب أحد الأزرار المقترحة أو اسألني سؤالًا محددًا. ملاحظة: هذه إجابة إرشادية محلية وليست اتصالًا بنموذج ذكاء اصطناعي مباشر.";
+}
+
+/* ---------- مجسّم ملاكم ثلاثي الأبعاد باستخدام Three.js ---------- */
+let boxer3d = null;
+let boxer3dMove = "jab";
+let boxer3dFrame = 0;
+let boxer3dResize = null;
+async function initBoxer3D() {
+  const host = document.getElementById("boxer3dStage");
+  const status = document.getElementById("boxer3dStatus");
+  if (!host) return;
+  if (boxer3d) { resizeBoxer3D(); return; }
+  try {
+    const THREE = await import("https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js");
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color("#111016");
+    scene.fog = new THREE.Fog("#111016", 5, 12);
+    const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100);
+    camera.position.set(0, 1.65, 6.8);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.6));
+    renderer.setSize(host.clientWidth || 320, host.clientHeight || 300);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    host.insertBefore(renderer.domElement, host.firstChild);
+    if (status) status.remove();
+
+    scene.add(new THREE.HemisphereLight(0xcad9ff, 0x241018, 2.1));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
+    keyLight.position.set(-3, 5, 5); keyLight.castShadow = true; scene.add(keyLight);
+    const rim = new THREE.PointLight(0x6c7dff, 22, 8); rim.position.set(2, 2.6, -1); scene.add(rim);
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(2.2, 48), new THREE.MeshStandardMaterial({ color: 0x1b1a24, roughness: 0.92 }));
+    floor.rotation.x = -Math.PI / 2; floor.position.y = -1.32; floor.scale.set(1.1, .7, 1); scene.add(floor);
+    const grid = new THREE.GridHelper(5, 18, 0x3b3447, 0x292430); grid.position.y = -1.3; scene.add(grid);
+
+    const avatar = new THREE.Group(); scene.add(avatar);
+    const skin = new THREE.MeshStandardMaterial({color:0xb87958, roughness:.72});
+    const suit = new THREE.MeshStandardMaterial({color:0x242632, roughness:.58, metalness:.12});
+    const trim = new THREE.MeshStandardMaterial({color:0xe11d2e, roughness:.38, metalness:.12});
+    const dark = new THREE.MeshStandardMaterial({color:0x11121a, roughness:.8});
+    function ball(parent, x,y,z, sx,sy,sz, material) {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(1,18,14),material);
+      m.position.set(x,y,z); m.scale.set(sx,sy,sz); m.castShadow=true; parent.add(m); return m;
+    }
+    function link(parent,a,b,r1,r2,material) {
+      const va=new THREE.Vector3(...a), vb=new THREE.Vector3(...b), d=new THREE.Vector3().subVectors(vb,va);
+      const m=new THREE.Mesh(new THREE.CylinderGeometry(r2,r1,d.length(),12),material);
+      m.position.copy(va).add(vb).multiplyScalar(.5);
+      m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize()); m.castShadow=true; parent.add(m); return m;
+    }
+    // torso and head
+    ball(avatar,0,.15,0,.42,.65,.25,suit);
+    ball(avatar,0,.65,.015,.37,.17,.24,suit);
+    ball(avatar,0,.99,.02,.19,.23,.19,skin);
+    ball(avatar,0,1.24,.04,.245,.27,.22,skin);
+    ball(avatar,0,1.31,.22,.245,.11,.06,dark);
+    ball(avatar,-.1,1.47,.03,.08,.045,.06,dark);
+    ball(avatar,.1,1.47,.03,.08,.045,.06,dark);
+    // shorts / legs
+    ball(avatar,0,-.42,0,.38,.22,.24,dark);
+    link(avatar,[-.2,-.48,0],[-.28,-.95,.03],.14,.105,suit);
+    link(avatar,[-.28,-.95,.03],[-.34,-1.24,.12],.105,.075,skin);
+    link(avatar,[.2,-.48,0],[.28,-.95,.03],.14,.105,suit);
+    link(avatar,[.28,-.95,.03],[.34,-1.24,.12],.105,.075,skin);
+    ball(avatar,-.35,-1.25,.2,.18,.09,.28,dark); ball(avatar,.35,-1.25,.2,.18,.09,.28,dark);
+    // shoulder pivot groups let the hands visibly move in 3D.
+    function arm(side) {
+      const pivot=new THREE.Group(); pivot.position.set(side*.34,.56,.02); avatar.add(pivot);
+      ball(pivot,0,0,0,.14,.14,.14,skin);
+      link(pivot,[0,0,0],[side*.11,-.22,.05],.105,.085,skin);
+      ball(pivot,side*.11,-.22,.05,.09,.09,.09,skin);
+      link(pivot,[side*.11,-.22,.05],[side*.06,-.36,.27],.085,.075,skin);
+      const glove=ball(pivot,side*.06,-.4,.31,.16,.14,.16,trim);
+      ball(pivot,side*.06,-.4,.44,.09,.085,.07,trim);
+      return {pivot,glove,side};
+    }
+    const left=arm(-1), right=arm(1);
+    const waist=avatar.position; avatar.rotation.y=-.12;
+    boxer3d={THREE,scene,camera,renderer,host,avatar,left,right,waist,clock:new THREE.Clock()};
+    boxer3dResize=()=>resizeBoxer3D();
+    window.addEventListener("resize",boxer3dResize);
+    document.querySelectorAll("[data-move3d]").forEach(btn=>btn.addEventListener("click",()=>{
+      boxer3dMove=btn.dataset.move3d;
+      document.querySelectorAll("[data-move3d]").forEach(b=>b.classList.toggle("active",b===btn));
+      const hints={jab:"مدّ اليد الأمامية للأمام ثم أعدها بسرعة إلى الحراسة.",cross:"دوّر الجذع قليلًا ومدّ اليد الخلفية للأمام ثم ارجع للحراسة.",guard:"ارفع القفازين قرب الخدين وحافظ على المرفقين قريبين من الجسم.",dodge:"حرّك الجذع والرأس حركة صغيرة إلى الجانب مع ثني الركبتين."};
+      const hint=document.getElementById("boxer3dHint"); if(hint) hint.textContent=hints[boxer3dMove];
+    }));
+    const animate=()=>{
+      if(!boxer3d)return;
+      boxer3dFrame=requestAnimationFrame(animate);
+      const t=boxer3d.clock.getElapsedTime(), phase=(t%1.65)/1.65;
+      const punch=phase<.45?Math.sin((phase/.45)*Math.PI):0;
+      left.pivot.rotation.set(0,0,0); right.pivot.rotation.set(0,0,0);
+      avatar.rotation.y=-.12;
+      if(boxer3dMove==="jab"){left.pivot.rotation.y=-.85*punch;left.pivot.rotation.x=-.75*punch;left.pivot.rotation.z=-.35*punch;avatar.rotation.y=-.12-.12*punch;}
+      if(boxer3dMove==="cross"){right.pivot.rotation.y=-.95*punch;right.pivot.rotation.x=-.8*punch;right.pivot.rotation.z=.45*punch;avatar.rotation.y=-.12+.18*punch;}
+      if(boxer3dMove==="guard"){left.pivot.rotation.z=-.38;right.pivot.rotation.z=.38;left.pivot.rotation.x=-.25;right.pivot.rotation.x=-.25;}
+      if(boxer3dMove==="dodge"){avatar.position.x=Math.sin(t*2.6)*.22;avatar.rotation.z=Math.sin(t*2.6)*.06;}
+      else {avatar.position.x=0;avatar.rotation.z=0;}
+      renderer.render(scene,camera);
+    };
+    animate();
+  } catch (err) {
+    if (status) status.textContent="تعذّر تحميل المجسّم ثلاثي الأبعاد. تأكد من اتصال الإنترنت ثم أعد فتح قسم التعلّم.";
+    console.error("3D boxing demo failed to load",err);
+  }
+}
+function resizeBoxer3D(){
+  if(!boxer3d)return;
+  const w=boxer3d.host.clientWidth||320,h=boxer3d.host.clientHeight||300;
+  boxer3d.camera.aspect=w/h;boxer3d.camera.updateProjectionMatrix();boxer3d.renderer.setSize(w,h);
+}
 
 // ---------- التهيئة ----------
 applyPrefs();
