@@ -209,7 +209,7 @@ const T = {
   res_avg_hit: ["متوسط وقت الإصابة", "Avg time to hit"],
   res_rounds: ["جولات مكتملة", "Rounds completed"],
   coach_tip_accuracy: ["دقتك في لمس الأهداف منخفضة. ركّز على لمس القفاز بقبضتك قبل زيادة السرعة.", "Your target accuracy is low. Focus on landing the glove with your fist before increasing speed."],
-  coach_chat_title: ["اسأل المدرّب الذكي", "Ask the AI Coach"],
+  coach_chat_title: ["اسأل المدرّب المحلي", "Ask the Local Coach"],
   coach_chat_unconfigured: ["المدرّب المحلي جاهز — لا يحتاج مفتاح API أو حسابًا خارجيًا.", "Local coach is ready — no API key or external account needed."],
   coach_chat_placeholder: ["اسأل عن الإحماء أو اللياقة أو الراحة أو السلامة...", "Ask about warm-ups, fitness, recovery, or safety..."],
   coach_chat_send: ["إرسال", "Send"],
@@ -1809,7 +1809,7 @@ el.coachChatForm.addEventListener("submit", async (event) => {
   el.coachChatInput.value = "";
   el.coachChatSend.disabled = true;
   if (!COACH_API_URL) {
-    el.coachChatStatus.textContent = "وضع المساعدة المحلي · لا يوجد اتصال بخادم ذكاء اصطناعي خارجي";
+    el.coachChatStatus.textContent = t("coach_chat_unconfigured");
     await new Promise(resolve => setTimeout(resolve, 250));
     addCoachMessage("assistant", localCoachReply(message));
     el.coachChatSend.disabled = false;
