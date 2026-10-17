@@ -832,6 +832,9 @@ function processHand(side, lm, now, canCount) {
   const iS = side === "left" ? 11 : 12;
   const iW = side === "left" ? 15 : 16;
   const S = lm[iS], W = lm[iW];
+  // نقطة القبضة (مفصل السبابة) هي التي تلمس القفاز، لا المعصم الذي يكون خلفها
+  const K = lm[side === "left" ? 19 : 20];
+  const fist = K && (K.visibility ?? 1) >= CFG.VIS_MIN ? K : W;
 
   if (!S || !W ||
       (S.visibility ?? 1) < CFG.VIS_MIN ||
@@ -859,7 +862,7 @@ function processHand(side, lm, now, canCount) {
 
   // بعد الضربة نتابع المعصم نصف ثانية، فإن لامس قفازًا مقتربًا تُحتسب الإصابة
   if (canCount && now < H.contactUntil) {
-    const sp = toScreen(W.x, W.y);
+    const sp = toScreen(fist.x, fist.y);
     if (tryTargetHit(side, sp)) H.contactUntil = 0;
   }
 
@@ -870,16 +873,16 @@ function processHand(side, lm, now, canCount) {
   if (canCount && mode === "sequence") {
     // في التسلسل: أي لمسة للقفاز بذراع ممدودة تُحتسب مرة واحدة لكل هدف (judged يمنع التكرار)
     // نُبقي حدًا أدنى للسرعة حتى لا تُحتسب اليد الثابتة التي تمر فوق القفاز
-    if (extended && speed >= speedMinNow * 0.5 && judgeSequenceHit(side, W.x, W.y)) H.lastJudge = now;
+    if (extended && speed >= speedMinNow * 0.5 && judgeSequenceHit(side, fist.x, fist.y)) H.lastJudge = now;
   } else if (canCount && countTargetsOnly) {
     // الحرّ مع احتساب الأهداف فقط: لا تُحتسب اللكمة إلا إذا وصلت إلى هدف حي
-    if (extended && H.armed && speed >= speedMinNow * 0.8 && judgeTargetPunch(side, W.x, W.y)) { H.armed = false; H.lastJudge = now; }
+    if (extended && H.armed && speed >= speedMinNow * 0.8 && judgeTargetPunch(side, fist.x, fist.y)) { H.armed = false; H.lastJudge = now; }
   } else if (canCount && extended && speed >= speedMinNow) {
     if (H.armed && now - H.lastPunch >= CFG.COOLDOWN_MS) {
       H.armed = false;
       H.lastPunch = now;
       H.lastJudge = now;
-      registerPunch(side, W.x, W.y, now);
+      registerPunch(side, fist.x, fist.y, now);
     }
   }
 }
