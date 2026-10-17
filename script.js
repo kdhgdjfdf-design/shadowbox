@@ -1748,7 +1748,7 @@ el.btnCloseHelp.addEventListener("click", () => (el.helpModal.hidden = true));
 el.btnCoach.addEventListener("click", () => {
   renderCoach();
   el.coachModal.hidden = false;
-  if (!COACH_API_URL) el.coachChatStatus.textContent = t("coach_chat_unconfigured");
+  if (!COACH_API_URL) el.coachChatStatus.textContent = "وضع المساعدة المحلي · اسأل عن أساسيات الملاكمة";
 });
 el.btnCloseCoach.addEventListener("click", () => (el.coachModal.hidden = true));
 document.querySelectorAll("[data-coach-prompt]").forEach(button => button.addEventListener("click", () => {
