@@ -15,7 +15,7 @@ const MODEL_URL =
 const STORAGE_KEY = "shadowbox_sessions_v1";
 const PREFS_KEY = "shadowbox_prefs_v1";
 // This is the existing Worker URL used by the project. Deploy worker/ai-coach.js to this Worker first.
-const COACH_API_URL = "https://shadowbox-coach.kdhgdjfdf.workers.dev";
+const COACH_API_URL = "";
 
 // ---------- ثوابت الكشف عن اللكمات (قابلة للضبط) ----------
 const CFG = {
@@ -210,12 +210,12 @@ const T = {
   res_rounds: ["جولات مكتملة", "Rounds completed"],
   coach_tip_accuracy: ["دقتك في لمس الأهداف منخفضة. ركّز على لمس القفاز بقبضتك قبل زيادة السرعة.", "Your target accuracy is low. Focus on landing the glove with your fist before increasing speed."],
   coach_chat_title: ["اسأل المدرّب الذكي", "Ask the AI Coach"],
-  coach_chat_unconfigured: ["المحادثة تحتاج ربط الخادم المركزي أولًا. التحليل المحلي يعمل كالمعتاد.", "Chat needs the central backend URL configured first. Local analysis still works."],
-  coach_chat_placeholder: ["اسأل عن الكومبوهات أو الدفاع أو حركة القدمين...", "Ask about combos, defense, or footwork..."],
+  coach_chat_unconfigured: ["المدرّب المحلي جاهز — لا يحتاج مفتاح API أو حسابًا خارجيًا.", "Local coach is ready — no API key or external account needed."],
+  coach_chat_placeholder: ["اسأل عن الإحماء أو اللياقة أو الراحة أو السلامة...", "Ask about warm-ups, fitness, recovery, or safety..."],
   coach_chat_send: ["إرسال", "Send"],
   coach_chat_thinking: ["المدرّب يفكّر...", "Coach is thinking..."],
   coach_chat_error: ["تعذّر الاتصال بالمدرّب. تحقّق من إعداد الخادم واتصال الإنترنت.", "Could not reach the coach. Check backend setup and your internet connection."],
-  coach_chat_privacy: ["لا ترسل معلومات شخصية. عند تفعيل الخدمة تُرسل رسالتك وملخص أرقام التدريب فقط؛ لا تُرسل صور الكاميرا.", "Do not send personal information. When enabled, only your message and a numeric training summary are sent; camera images are never sent."],
+  coach_chat_privacy: ["🔒 المدرّب يعمل محليًا داخل التطبيق؛ لا يحتاج مفتاح API ولا يرسل رسائلك إلى خادم خارجي.", "🔒 The coach runs locally in the app; it needs no API key and does not send your messages to an external server."],
   hist_sessions: ["جلسة", "sessions"],
   hist_punches: ["لكمة إجمالًا", "total punches"],
   hist_minutes: ["دقيقة تدريب", "training minutes"],
@@ -1916,17 +1916,45 @@ document.addEventListener("visibilitychange", () => {
 });
 
 
-/* ---------- مدرّب محلي: أجوبة إرشادية عند عدم ربط خادم AI ---------- */
+/* ---------- مدرّب محلي: يعمل دون API أو خادم خارجي ---------- */
 function localCoachReply(question) {
-  const q = question.toLowerCase();
-  if (/\b(jab|جاب)\b|الجاب/.test(q)) return "الجاب هي لكمة اليد الأمامية: ابدأ من وضعية الحراسة، مدّ الذراع بخط مستقيم مع إبقاء الكتف مرتفعًا لحماية الذقن، ثم أعد اليد مباشرة إلى الحراسة. ابدأ ببطء وبدون قوة زائدة.";
-  if (/\b(cross|كروس)\b|الكروس/.test(q)) return "الكروس لكمة اليد الخلفية. ادفع الأرض بقدمك الخلفية، ودوّر الورك والكتف معًا، ثم مدّ الذراع بخط مستقيم وأعدها إلى الحراسة. لا تلفّ الركبة بعنف.";
-  if (/كومبو|combo|تسلسل/.test(q)) return "جرّب هذا التسلسل للمبتدئين: 1) جاب باليد الأمامية، 2) كروس باليد الخلفية، 3) خطوة صغيرة للخلف ثم عُد للحراسة. نفّذه ببطء أولًا وركّز على التوازن والدقة.";
-  if (/قدم|footwork|خطو/.test(q)) return "حرّك القدم الأقرب لاتجاهك أولًا، ثم اتبعها بالقدم الأخرى مع الحفاظ على المسافة نفسها تقريبًا بين القدمين. لا تجمع القدمين ولا تجعلهما تتقاطعان، وحافظ على الركبتين مرتاحتين.";
-  if (/دفاع|حراس|guard/.test(q)) return "ارفع اليدين قرب الخدين، واجعل المرفقين قريبين من الجسم والذقن منخفضًا قليلًا. بعد كل لكمة أعد يدك فورًا. تدرّب ببطء أمام مساحة خالية.";
-  if (/مراوغ|تفاد|dodge|weav/.test(q)) return "للمراوغة الآمنة: اثنِ الركبتين قليلًا وحرّك الرأس والجذع حركة صغيرة من الركبتين والورك، لا تنحنِ بقوة من الخصر. ابدأ دون شريك أو ضربات قادمة.";
-  if (/تعب|لياق|نفس|stamina/.test(q)) return "ابدأ بجولات قصيرة وبسرعة يمكنك التحكم بها، وخذ راحة عند الحاجة. زد المدة تدريجيًا، وتوقف إذا شعرت بألم أو دوخة. الجودة والتوازن أهم من السرعة.";
-  return "أقدر أساعدك بأساسيات الملاكمة: الجاب، الكروس، الحراسة، المراوغة، حركة القدمين والكومبوهات. جرّب أحد الأزرار المقترحة أو اسألني سؤالًا محددًا. ملاحظة: هذه إجابة إرشادية محلية وليست اتصالًا بنموذج ذكاء اصطناعي مباشر.";
+  const q = String(question || "").toLowerCase();
+  const en = lang === "en";
+  const answers = {
+    safety: en
+      ? "Safety first: use a clear space, keep your phone securely mounted, warm up gently, and stop if you feel pain, dizziness, or unusual shortness of breath. Ask a qualified coach or trusted adult if you are unsure."
+      : "السلامة أولًا: اختر مساحة خالية، وثبّت الهاتف جيدًا، وابدأ بإحماء خفيف. توقّف إذا شعرت بألم أو دوخة أو ضيق نفس غير معتاد، واستشر مدربًا مؤهلًا أو شخصًا بالغًا تثق به عند الحاجة.",
+    warmup: en
+      ? "Try a gentle 5-minute warm-up: easy marching in place, relaxed shoulder circles, comfortable arm movements, and light steps. Keep it easy; this is preparation, not a test."
+      : "جرّب إحماءً خفيفًا لمدة 5 دقائق: المشي في المكان، وتحريك الكتفين بهدوء، وحركات مريحة للذراعين، وخطوات خفيفة. خليك على وتيرة سهلة؛ الهدف الاستعداد وليس اختبار قدرتك.",
+    fitness: en
+      ? "Build general fitness gradually: alternate comfortable movement with rest, keep a pace where you can still talk, and increase only one thing at a time. Consistency matters more than pushing hard."
+      : "طوّر لياقتك بالتدريج: بدّل بين حركة مريحة وراحة، واختر سرعة تستطيع معها الكلام، وزِد عاملًا واحدًا فقط كل مرة. الاستمرار أهم من الضغط على نفسك.",
+    recovery: en
+      ? "Recovery is part of training. Drink water regularly, eat normal balanced meals, get enough sleep, and take a rest day when you feel unusually tired. More training is not always better."
+      : "الراحة جزء من التدريب. اشرب الماء بانتظام، وتناول وجبات متوازنة، ونَمْ بما يكفي، وخذ يوم راحة إذا كان التعب غير معتاد. التدريب الأكثر ليس دائمًا الأفضل.",
+    camera: en
+      ? "For camera tracking, place the phone steadily, use bright light from in front of you, keep your whole upper body in frame, and allow camera permission. Tracking can still make mistakes, so treat the numbers as estimates."
+      : "لتحسين تتبّع الكاميرا: ثبّت الهاتف، واجعل الإضاءة أمامك، وأبقِ الجزء العلوي من جسمك ظاهرًا كاملًا، واسمح بإذن الكاميرا. قد يخطئ التتبّع أحيانًا، لذلك اعتبر الأرقام تقديرية.",
+    progress: en
+      ? "A useful progress check is how regularly you trained, how comfortable the session felt, and whether you recovered well. Do not judge a session by one number alone."
+      : "لمتابعة تقدمك، راقب انتظامك في التدريب، ومدى راحة الجلسة، وجودة تعافيك بعدها. لا تحكم على الجلسة من رقم واحد فقط.",
+    fallback: en
+      ? "I work offline, so my answers come from a small built-in guide rather than live AI. I can help with warm-ups, general fitness, camera setup, recovery, progress tracking, and safety. Try asking about one of those topics."
+      : "أنا مدرّب محلي يعمل دون إنترنت أو API، لذلك إجاباتي من دليل صغير مدمج وليست ذكاءً اصطناعيًا مباشرًا. أقدر أساعدك في الإحماء واللياقة العامة وإعداد الكاميرا والتعافي ومتابعة التقدم والسلامة. اسألني عن أحد هذه المواضيع."
+  };
+  if (/ألم|دوخ|سلام|إصاب|خطر|safety|pain|dizz|injur|unsafe/.test(q)) return answers.safety;
+  if (/إحماء|احماء|warm.?up|warmup|قبل التمرين/.test(q)) return answers.warmup;
+  if (/تعب|لياق|نفس|stamina|fitness|تحمل|تمرين/.test(q)) return answers.fitness;
+  if (/راحة|تعاف|نوم|ماء|recovery|rest|sleep|water/.test(q)) return answers.recovery;
+  if (/كاميرا|camera|إضاءة|إضائه|تتبع|tracking|لا تحسب|ما تحسب/.test(q)) return answers.camera;
+  if (/تقدم|نتيجة|إحصاء|احصاء|progress|stats|تحسن/.test(q)) return answers.progress;
+  if (/كومبو|combo|جاب|كروس|jab|cross|ضرب|لكم|punch|دفاع|حراسة|مراوغ|dodge|weav|footwork|حركة القدم/.test(q)) {
+    return en
+      ? "I can’t coach striking techniques or fight tactics. I can help you train safely without contact: warm-ups, balance, general conditioning, recovery, and how to set up the app."
+      : "ما أقدر أشرح تقنيات الضرب أو تكتيكات القتال. أقدر أساعدك بتدريب آمن دون احتكاك: الإحماء والتوازن واللياقة العامة والتعافي وإعداد التطبيق.";
+  }
+  return answers.fallback;
 }
 
 /* ---------- شخصية ملاكم بشرية ثلاثية الأبعاد ---------- */
