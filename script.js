@@ -1775,7 +1775,7 @@ el.coachChatForm.addEventListener("submit", async (event) => {
   el.coachChatStatus.textContent = t("coach_chat_thinking");
   const analysis = analyzeSessions(loadSessions());
   try {
-    const response = await fetch(COACH_API_URL.replace(/\\/$/, "") + "/api/chat", {
+    const response = await fetch(COACH_API_URL.replace(/\/$/, "") + "/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
