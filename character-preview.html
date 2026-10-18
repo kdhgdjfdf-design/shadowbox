@@ -21,12 +21,15 @@ main{max-width:760px;margin:auto}.top{display:flex;align-items:center;gap:12px;m
 <div class="hint" id="hint">الشخصية في وضع الوقوف الطبيعي مع حركة انتظار خفيفة. هذه معاينة للشكل فقط وليست تدريبًا على الحركات.</div>
 <p class="note">يتم تحميل مكتبة العرض ونموذج الشخصية من الإنترنت. إذا لم تظهر، افتح الصفحة في Chrome وتأكد من الاتصال. لم يتم تعديل شاشة التطبيق الرئيسية.</p>
 </main>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
 <script type="module">
 const stage=document.getElementById('stage'),status=document.getElementById('status');
 let THREE,scene,camera,renderer,avatar,mixer,clock,angle=0;
 try{
-THREE=await import('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js');
-const {GLTFLoader}=await import('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js');
+THREE=await import('three');
+const {GLTFLoader}=await import('three/addons/loaders/GLTFLoader.js');
 scene=new THREE.Scene();scene.background=new THREE.Color('#111016');scene.fog=new THREE.Fog('#111016',7,16);
 camera=new THREE.PerspectiveCamera(31,1,.1,100);camera.position.set(0,1.15,5.8);camera.lookAt(0,.15,0);
 renderer=new THREE.WebGLRenderer({antialias:true,alpha:false});renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.5));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.shadowMap.enabled=true;stage.insertBefore(renderer.domElement,stage.firstChild);
