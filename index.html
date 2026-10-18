@@ -91,39 +91,9 @@
     </div>
   </main>
 
-  <!-- ============ قسم التعلّم ============ -->
-  <main id="learnScreen" class="screen">
-    <div class="setup-head">
-      <button id="btnLearnBack" class="chip" data-i18n="btn_back">رجوع</button>
-      <h2 class="setup-name" data-i18n="nav_learn">التعلّم</h2>
-    </div>
-
-    <section class="card">
-      <h2 data-i18n="learn_combos_t">الكومبوهات</h2>
-      <ul class="tips">
-        <li data-i18n="learn_combos_1"></li>
-        <li data-i18n="learn_combos_2"></li>
-      </ul>
-    </section>
-
-    <section class="card">
-      <h2 data-i18n="learn_feet_t">حركة القدمين</h2>
-      <ul class="tips">
-        <li data-i18n="learn_feet_1"></li>
-        <li data-i18n="learn_feet_2"></li>
-      </ul>
-    </section>
-
-    <section class="card">
-      <h2 data-i18n="learn_def_t">الدفاع</h2>
-      <ul class="tips">
-        <li data-i18n="learn_def_1"></li>
-        <li data-i18n="learn_def_2"></li>
-      </ul>
-    </section>
-
-    <p class="notice small" data-i18n="learn_note"></p>
-    <a class="btn primary big" href="./learning-preview.html" style="display:block;text-align:center;text-decoration:none;margin-top:14px">🎬 مشاهدة دروس الفيديو</a>
+  <!-- ============ قسم التعلّم: تُفتح دروس الفيديو مباشرة ============ -->
+  <main id="learnScreen" class="screen" aria-hidden="true">
+    <button id="btnLearnBack" class="chip" hidden data-i18n="btn_back">رجوع</button>
   </main>
 
   <!-- ============ شاشة إعدادات الجلسة ============ -->
