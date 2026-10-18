@@ -1731,7 +1731,9 @@ el.btnCloseCoach.addEventListener("click", () => (el.coachModal.hidden = true));
 
 // الأقسام الأربعة في الرئيسية
 el.btnTraining.addEventListener("click", () => showScreen("trainMenu"));
-el.btnLearn.addEventListener("click", () => showScreen("learn"));
+el.btnLearn.addEventListener("click", () => {
+  window.location.href = "learning-preview.html";
+});
 el.btnTrainBack.addEventListener("click", () => showScreen("home"));
 el.btnLearnBack.addEventListener("click", () => showScreen("home"));
 
@@ -1765,8 +1767,17 @@ el.btnAgain.addEventListener("click", async () => {
 });
 el.btnHome.addEventListener("click", () => exitTraining("home"));
 
+// شاشة الدخول: تظهر أول مرة فقط في الجلسة؛ الرجوع من المدرّب لا يعيدها
+try {
+  if (sessionStorage.getItem("shadowbox_entered_v1") === "1") {
+    el.splash.classList.add("hide");
+    el.splash.hidden = true;
+  }
+} catch {}
+
 // شاشة الدخول: الضغط عليها يفعّل الصوت ويشغّل نغمة الدخول
 el.splash.addEventListener("click", () => {
+  try { sessionStorage.setItem("shadowbox_entered_v1", "1"); } catch {}
   getAudio();
   tone(440, 0.15, 0.2, "sine");
   setTimeout(() => tone(660, 0.15, 0.2, "sine"), 150);
