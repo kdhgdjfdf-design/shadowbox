@@ -1921,7 +1921,7 @@ let boxer3dFrame = 0;
 let boxer3dResize = null;
 let boxer3dMove = "jab";
 
-async async function initBoxer3D() {
+async function initBoxer3D() {
   const host = document.getElementById("boxer3dStage");
   const status = document.getElementById("boxer3dStatus");
   if (!host) return;
