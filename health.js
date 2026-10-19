@@ -14,9 +14,9 @@ const copy = {
     title:"الصحة والتغذية", subtitle:"دعم التعافي والعادات اليومية", heroTitle:"قوّتك تبدأ من عاداتك",
     heroText:"معلومات مبسطة تساعدك على الاهتمام بالنوم، والطعام، والماء، والتعافي إلى جانب التدريب.",
     bodyTitle:"معلومات الجسم", bodySub:"أدخل القياسات إن أردت عرضها فقط.", age:"العمر (سنة)", height:"الطول (سم)", weight:"الوزن (كغ)",
-    review:"عرض ملخص القياسات", demo:"القيم المعروضة تجريبية ويمكنك تغييرها. لم يتم إجراء أي تشخيص.",
-    invalid:"تحقق من المدخلات: العمر 10–19 سنة، والطول 80–230 سم، والوزن 10–250 كغ.",
-    summary:(a,h,w)=>`المدخلات الحالية: العمر ${a} سنة، والطول ${h} سم، والوزن ${w} كغ. هذه أرقام وصفية فقط وليست تقييمًا صحيًا.`,
+    review:"حساب مؤشر كتلة الجسم", demo:"أدخل العمر والطول والوزن ثم اضغط لحساب مؤشر كتلة الجسم.",
+    invalid:"أدخل بيانات صحيحة: العمر 10–19 سنة، والطول 80–230 سم، والوزن 10–250 كغ.",
+    summary:(bmi,a)=>`مؤشر كتلة الجسم: ${bmi} كغ/م². في سن المراهقة لا يُفسَّر الرقم باستخدام حدود البالغين؛ يحتاج التقييم إلى العمر والجنس ومخططات النمو، وهذا الحساب ليس تشخيصًا.`,
     disclaimer:"في سن النمو لا تكفي قياسات الطول والوزن وحدها للحكم على الصحة؛ يفسّر المختص نمو المراهق باستخدام العمر والجنس ومخططات النمو والسياق الصحي. هذا القسم ليس أداة تشخيص.",
     label:"عادات تدعم التدريب", nutrition:"التغذية المتوازنة", nutritionText:"نوّع وجباتك بين مصادر البروتين، والحبوب أو النشويات، والخضار والفواكه، والدهون المفيدة. تناول وجبات منتظمة ومشبعة، ولا تعتمد على المكملات أو الحميات القاسية دون مختص.",
     water:"الماء والترطيب", waterText:"اشرب الماء خلال اليوم، وخذ رشفات أثناء التدريب وبعده. تزداد الحاجة مع الحرارة والتعرّق؛ لا تجبر نفسك على شرب كميات كبيرة دفعة واحدة.",
@@ -29,9 +29,9 @@ const copy = {
     title:"Health & Nutrition", subtitle:"Recovery and everyday habits", heroTitle:"Strength starts with habits",
     heroText:"Simple guidance on sleep, food, hydration, and recovery alongside training.",
     bodyTitle:"Body information", bodySub:"Enter measurements for display only.", age:"Age (years)", height:"Height (cm)", weight:"Weight (kg)",
-    review:"Review measurements", demo:"These are sample values you can change. No diagnosis is performed.",
-    invalid:"Check your entries: age 10–19 years, height 80–230 cm, weight 10–250 kg.",
-    summary:(a,h,w)=>`Current entries: age ${a} years, height ${h} cm, weight ${w} kg. These are descriptive values only, not a health assessment.`,
+    review:"Calculate BMI", demo:"Enter age, height, and weight, then calculate your BMI.",
+    invalid:"Enter valid values: age 10–19 years, height 80–230 cm, weight 10–250 kg.",
+    summary:(bmi,a)=>`Body mass index: ${bmi} kg/m². For teens, the number should not be interpreted using adult cutoffs; assessment uses age, sex, and growth charts. This calculation is not a diagnosis.`,
     disclaimer:"During adolescence, height and weight alone cannot determine health. A qualified professional interprets growth using age, sex, growth charts, and health context. This section is not a diagnostic tool.",
     label:"Habits that support training", nutrition:"Balanced nutrition", nutritionText:"Vary meals with protein sources, grains or other carbohydrates, vegetables and fruit, and beneficial fats. Eat regular, satisfying meals; avoid restrictive diets or supplements without qualified guidance.",
     water:"Hydration", waterText:"Drink water throughout the day and take sips during and after training. Needs rise with heat and sweating; do not force large amounts at once.",
@@ -193,11 +193,13 @@ function reviewMeasurements() {
   const lang = languageSelect?.value === "en" ? "en" : "ar";
   const t = copy[lang];
   const age = Number(ageInput.value), height = Number(heightInput.value), weight = Number(weightInput.value);
-  const valid = Number.isFinite(age) && Number.isFinite(height) && Number.isFinite(weight)
+  const valid = ageInput.value.trim() !== "" && heightInput.value.trim() !== "" && weightInput.value.trim() !== ""
+    && Number.isFinite(age) && Number.isFinite(height) && Number.isFinite(weight)
     && age >= 10 && age <= 19 && height >= 80 && height <= 230 && weight >= 10 && weight <= 250;
   result.dataset.reviewed = "true";
   if (!valid) { result.textContent = t.invalid; return; }
-  result.textContent = t.summary(age, height, weight);
+  const bmi = weight / ((height / 100) ** 2);
+  result.textContent = t.summary(bmi.toFixed(1), age);
 }
 openButton.addEventListener("click", () => { setupHealthNavigation(); applyLanguage(); showHealthMenu(); modal.hidden = false; closeButton.focus(); });
 closeButton.addEventListener("click", goBackHealth);
