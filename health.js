@@ -42,6 +42,37 @@ const copy = {
   }
 };
 
+
+const originalTopicMarkup = [...modal.querySelectorAll("details.health-topic")].map(node => node.innerHTML);
+const englishTopicMarkup = [
+  `<summary><span class="health-icon">🍽️</span><div><h3>Balanced nutrition</h3><p>Food groups, examples, and how they support your body.</p></div><span class="health-chevron">⌄</span></summary>
+   <div class="health-topic-body">
+    <article><h4>🥚 Protein</h4><p><b>Examples:</b> Eggs, fish, chicken, milk and yogurt, lentils, chickpeas, and beans.</p><p><b>Benefits:</b> Supports muscle building, tissue repair, growth, and recovery after training.</p></article>
+    <article><h4>🍚 Carbohydrates</h4><p><b>Examples:</b> Oats, bread, rice, potatoes, pasta, corn, and fruit.</p><p><b>Benefits:</b> An important source of energy for your brain and muscles during school and exercise.</p></article>
+    <article><h4>🥑 Healthy fats</h4><p><b>Examples:</b> Olive oil, nuts, seeds, avocado, and oily fish.</p><p><b>Benefits:</b> Help your body absorb some vitamins and support cells and normal growth.</p></article>
+    <article><h4>🥦 Vegetables and fruit</h4><p><b>Examples:</b> Oranges, apples, carrots, tomatoes, spinach, and seasonal vegetables.</p><p><b>Benefits:</b> Provide vitamins, minerals, and fibre that support digestion and general health.</p></article>
+    <p class="health-note">Every meal does not need to be perfect. Choose a variety of foods and eat enough regularly; avoid restrictive diets while growing.</p>
+   </div>`,
+  `<summary><span class="health-icon">💧</span><div><h3>Hydration</h3><p>Your water needs vary with weather, activity, and sweating.</p></div><span class="health-chevron">⌄</span></summary>
+   <div class="health-topic-body">
+    <article><h4>🚰 How much should I drink?</h4><p>Drink regularly throughout the day and with meals. Take sips before, during, and after exercise. There is no single amount that suits everyone; needs rise in hot weather, with sweating, and during longer activity.</p></article>
+    <article><h4>🥤 What should I choose?</h4><p>Make water your main drink. Limit sugary soft drinks and energy drinks, which often contain lots of sugar; caffeine in energy drinks can also harm teenagers’ sleep.</p></article>
+    <article><h4>⚠️ Be careful</h4><p>Do not force yourself to drink many litres quickly. Drink according to thirst and conditions. During long exercise or extreme heat, rest somewhere cool and tell a trusted adult if you feel dizzy.</p></article>
+   </div>`,
+  `<summary><span class="health-icon">🌙</span><div><h3>Sleep and recovery</h3><p>Rest is part of training, not wasted time.</p></div><span class="health-chevron">⌄</span></summary>
+   <div class="health-topic-body">
+    <article><h4>😴 Sleep</h4><p>Most teenagers need 8–10 hours of sleep each night. Try to keep a regular bedtime, and put your phone away before bed if it distracts you.</p><p><b>Benefits:</b> Sleep supports focus, learning, mood, and physical recovery.</p></article>
+    <article><h4>🧘 Rest between sessions</h4><p>Alternate training days with rest or light activity, and reduce effort if you are exhausted or ill.</p><p><b>Benefits:</b> Gives your body time to recover and helps you continue safely.</p></article>
+   </div>`,
+  `<summary><span class="health-icon">🥊</span><div><h3>Safer training</h3><p>Build up gradually and focus on technique before speed.</p></div><span class="health-chevron">⌄</span></summary>
+   <div class="health-topic-body">
+    <article><h4>🔥 Before training</h4><p>Warm up gently, check that the space around you is clear, and place your phone away from your movement path.</p><p><b>Benefit:</b> A gradual warm-up helps prepare your body for movement.</p></article>
+    <article><h4>🛡️ During training</h4><p>Keep your wrist straight when shadowboxing, and never punch a wall or hard surface. Increase duration and speed gradually.</p></article>
+    <article><h4>🛑 When should I stop?</h4><p>Stop if you feel pain, dizziness, or unusual shortness of breath. Tell a trusted adult if symptoms continue or worry you.</p></article>
+   </div>`
+];
+let lastReview = null;
+
 // Navigation: a section menu plus separate detail pages with one-step back.
 let currentHealthView = "menu";
 let healthMenuView = null;
@@ -151,6 +182,9 @@ function applyLanguage() {
   const lang = languageSelect?.value === "en" ? "en" : "ar";
   const t = copy[lang];
   modal.dir = lang === "ar" ? "rtl" : "ltr";
+  [...modal.querySelectorAll("details.health-topic")].forEach((node, i) => {
+    node.innerHTML = lang === "en" ? englishTopicMarkup[i] : originalTopicMarkup[i];
+  });
   modal.querySelectorAll(".health-detail-back").forEach((button) => { button.textContent = lang === "en" ? "‹ Back to topics" : "‹ رجوع إلى المواضيع"; });
   const menuHint = modal.querySelector(".health-menu-hint");
   if (menuHint) menuHint.textContent = lang === "en" ? "Choose a topic to open its information." : "اختر موضوعًا لفتح صفحة المعلومات الخاصة به.";
@@ -187,7 +221,11 @@ function applyLanguage() {
   closeButton.setAttribute("aria-label",t.back);
   openButton.querySelector("b").textContent=t.navTitle;
   openButton.querySelector("small").textContent=t.navSub;
-  if (!result.dataset.reviewed) result.textContent=t.demo;
+  if (!lastReview) {
+    result.textContent = t.demo;
+  } else {
+    result.textContent = lastReview.valid ? t.summary(lastReview.bmi, lastReview.age) : t.invalid;
+  }
 }
 function reviewMeasurements() {
   const lang = languageSelect?.value === "en" ? "en" : "ar";
@@ -197,9 +235,14 @@ function reviewMeasurements() {
     && Number.isFinite(age) && Number.isFinite(height) && Number.isFinite(weight)
     && age >= 10 && age <= 19 && height >= 80 && height <= 230 && weight >= 10 && weight <= 250;
   result.dataset.reviewed = "true";
-  if (!valid) { result.textContent = t.invalid; return; }
+  if (!valid) {
+    lastReview = { valid: false };
+    result.textContent = t.invalid;
+    return;
+  }
   const bmi = weight / ((height / 100) ** 2);
-  result.textContent = t.summary(bmi.toFixed(1), age);
+  lastReview = { valid: true, bmi: bmi.toFixed(1), age };
+  result.textContent = t.summary(lastReview.bmi, age);
 }
 openButton.addEventListener("click", () => { setupHealthNavigation(); applyLanguage(); showHealthMenu(); modal.hidden = false; closeButton.focus(); });
 closeButton.addEventListener("click", goBackHealth);
