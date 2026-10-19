@@ -58,11 +58,6 @@ function setupHealthNavigation() {
   const footer = contentArea.querySelector(".health-footer-note");
   const items = [];
 
-  if (bodyCard) items.push({
-    id: "body", node: bodyCard, icon: "🧍",
-    title: bodyCard.querySelector("h3")?.textContent || "معلومات الجسم",
-    description: bodyCard.querySelector(".health-card-title p")?.textContent || "عرض معلومات الجسم"
-  });
   topics.forEach((node, index) => {
     const summary = node.querySelector("summary");
     items.push({
@@ -77,6 +72,7 @@ function setupHealthNavigation() {
   healthMenuView = document.createElement("div");
   healthMenuView.className = "health-view health-menu-view";
   if (hero) healthMenuView.appendChild(hero);
+  if (bodyCard) healthMenuView.appendChild(bodyCard);
   const intro = document.createElement("p");
   intro.className = "health-menu-hint";
   intro.textContent = languageSelect?.value === "en"
