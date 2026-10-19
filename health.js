@@ -90,6 +90,7 @@ function setupHealthNavigation() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "health-menu-item";
+    button.dataset.healthTarget = item.id;
     button.innerHTML = '<span class="health-menu-icon"></span><span class="health-menu-copy"><b></b><small></small></span><span class="health-menu-arrow" aria-hidden="true">‹</span>';
     button.querySelector(".health-menu-icon").textContent = item.icon;
     button.querySelector("b").textContent = item.title;
@@ -173,6 +174,18 @@ function applyLanguage() {
   [[t.nutrition,t.nutritionText],[t.water,t.waterText],[t.sleep,t.sleepText],[t.training,t.trainingText]].forEach((item,i)=>{
     tips[i].querySelector("h3").textContent=item[0];
     tips[i].querySelector("p").textContent=item[1];
+  });
+  healthDetailViews.forEach((page) => {
+    const heading = page.querySelector(".health-detail-heading h3");
+    const sourceTitle = page.querySelector(".health-card-title h3, .health-topic summary h3");
+    if (heading && sourceTitle) heading.textContent = sourceTitle.textContent;
+  });
+  modal.querySelectorAll(".health-menu-item").forEach((button) => {
+    const page = healthDetailViews.get(button.dataset.healthTarget);
+    const title = page?.querySelector(".health-card-title h3, .health-topic summary h3");
+    const description = page?.querySelector(".health-card-title p, .health-topic summary p");
+    if (title) button.querySelector("b").textContent = title.textContent;
+    if (description) button.querySelector("small").textContent = description.textContent;
   });
   modal.querySelector(".health-footer-note").textContent = t.footer;
   closeButton.setAttribute("aria-label",t.back);
