@@ -1795,7 +1795,10 @@ function addCoachMessage(role, text, sources = []) {
     item.appendChild(box);
   }
   el.coachChatMessages.appendChild(item);
-  el.coachChatMessages.scrollTop = el.coacel.coachChatForm.addEventListener("submit", async (event) => {
+  el.coachChatMessages.scrollTop = el.coachChatMessages.scrollHeight;
+}
+
+el.coachChatForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const message = el.coachChatInput.value.trim();
   if (!message || message.length > 1000) return;
@@ -1810,8 +1813,6 @@ function addCoachMessage(role, text, sources = []) {
     : "دليل محلي · لا يستخدم خدمة ذكاء اصطناعي خارجية";
   el.coachChatSend.disabled = false;
   el.coachChatInput.focus();
-});coachChatInput.focus();
-  }
 });
 
 // الأقسام الأربعة في الرئيسية
