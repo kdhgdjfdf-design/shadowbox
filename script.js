@@ -207,6 +207,13 @@ const T = {
   res_avg_hit: ["متوسط وقت الإصابة", "Avg time to hit"],
   res_rounds: ["جولات مكتملة", "Rounds completed"],
   coach_tip_accuracy: ["دقتك في لمس الأهداف منخفضة. ركّز على لمس القفاز بقبضتك قبل زيادة السرعة.", "Your target accuracy is low. Focus on landing the glove with your fist before increasing speed."],
+  coach_chat_title: ["اسأل المدرّب المحلي", "Ask the Local Coach"],
+  coach_chat_unconfigured: ["المدرّب المحلي جاهز — لا يحتاج مفتاح API أو حسابًا خارجيًا.", "Local coach is ready — no API key or external account needed."],
+  coach_chat_placeholder: ["اسأل عن الإحماء أو اللياقة أو الراحة أو السلامة...", "Ask about warm-ups, fitness, recovery, or safety..."],
+  coach_chat_send: ["إرسال", "Send"],
+  coach_chat_thinking: ["المدرّب يفكّر...", "Coach is thinking..."],
+  coach_chat_error: ["تعذّر الاتصال بالمدرّب. تحقّق من إعداد الخادم واتصال الإنترنت.", "Could not reach the coach. Check backend setup and your internet connection."],
+  coach_chat_privacy: ["🔒 المدرّب يعمل محليًا داخل التطبيق؛ لا يحتاج مفتاح API ولا يرسل رسائلك إلى خادم خارجي.", "🔒 The coach runs locally in the app; it needs no API key and does not send your messages to an external server."],
   hist_sessions: ["جلسة", "sessions"],
   hist_punches: ["لكمة إجمالًا", "total punches"],
   hist_minutes: ["دقيقة تدريب", "training minutes"],
@@ -240,9 +247,9 @@ const T = {
   learn_def_1: ["أبقِ قبضتيك قرب وجهك دائمًا، وذقنك مائلًا قليلًا للأسفل.", "Keep your fists near your face at all times, with your chin slightly down."],
   learn_def_2: ["تفادَ بتحريك الرأس والجسم، لا بالتراجع وحده.", "Slip by moving your head and body, not by stepping back alone."],
   learn_note: ["هذه نصائح عامة للمبتدئين، وليست تحليلًا لحركتك.", "These are general beginner tips, not an analysis of your movement."],
-  coach_name: ["المدرّب الذكي", "AI Coach"],
-  coach_desc: ["تحليل جلساتك واقتراح تمارين مناسبة", "Analyzes your sessions and suggests drills"],
-  coach_title: ["المدرّب الذكي 🧠", "AI Coach 🧠"],
+  coach_name: ["المدرّب المحلي", "Local Coach"],
+  coach_desc: ["مساعدة محلية دون اتصال بخدمة ذكاء اصطناعي", "Built-in guidance without an external AI service"],
+  coach_title: ["المدرّب المحلي 🧠", "Local Coach 🧠"],
   coach_empty: ["أكمل جلسة واحدة على الأقل ليبدأ المدرّب بتحليل أدائك.", "Complete at least one session so the coach can analyze your performance."],
   coach_note: ["التحليل يتم محليًا على جهازك من أرقام الجلسات فقط، دون رفع أي صورة أو استخدام خدمة خارجية.", "Analysis runs locally on your device from session numbers only. No images are uploaded and no external service is used."],
   coach_stat_sessions: ["جلسات محللة", "sessions analyzed"],
@@ -292,7 +299,7 @@ const IDS = [
   "historyModal", "historyBody", "btnClearHistory", "btnCloseHistory",
   "helpModal", "btnCloseHelp", "seqPrompt", "btnStats", "btnLabels", "sensSel", "countSel", "splash",
   "settingsModal", "langSel", "btnCloseSettings", "btnResetHistory",
-  "btnCoach", "coachModal", "coachBody", "btnCloseCoach",
+  "btnCoach", "coachModal", "coachBody", "btnCloseCoach", "coachChatStatus", "coachChatMessages", "coachChatForm", "coachChatInput", "coachChatSend",
   "btnTraining", "btnLearn", "trainMenuScreen", "learnScreen", "btnTrainBack", "btnLearnBack",
 ];
 const el = {};
@@ -362,7 +369,7 @@ function freshStats() {
            punchHit: 0, punchMiss: 0, missJab: 0, missCross: 0, hitJab: 0, hitCross: 0, reactSum: 0, reactN: 0, roundsDone: 0 };
 }
 function freshHand() {
-  return { armed: true, hist: [], lastPunch: -1e9, lastJudge: -1e9, contactUntil: 0, ep: freshEpisode() };
+  return { armed: true, hist: [], lastPunch: -1e9, lastJudge: -1e9, lastFistScreen: null, lastExt: null, lastZF: null, ep: freshEpisode() };
 }
 function freshEpisode() {
   return { active: false, start: 0, hit: false, targeted: false, type: "" };
@@ -487,6 +494,7 @@ function applyLang() {
   document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
   document.querySelectorAll("[data-i18n]").forEach((n) => { n.textContent = t(n.dataset.i18n); });
   document.querySelectorAll("[data-i18n-html]").forEach((n) => { n.innerHTML = t(n.dataset.i18nHtml); });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((n) => { n.placeholder = t(n.dataset.i18nPlaceholder); });
   el.langSel.value = lang;
   setSetupMode();
   setStatsHidden(statsHidden);
@@ -896,6 +904,9 @@ function processHand(side, lm, now, canCount) {
       poseSW < 2) {
     H.armed = true;
     H.hist = [];
+    H.lastFistScreen = null;
+    H.lastExt = null;
+    H.lastZF = null;
     return;
   }
 
@@ -915,12 +926,6 @@ function processHand(side, lm, now, canCount) {
     speed = Math.hypot(wx - o.x, wy - o.y, (zF - o.zF) * sw) / sw / dt;
   }
 
-  // بعد الضربة نتابع المعصم نصف ثانية، فإن لامس قفازًا مقتربًا تُحتسب الإصابة
-  if (canCount && now < H.contactUntil) {
-    const sp = toScreen(fist.x, fist.y);
-    if (tryTargetHit(side, sp)) H.contactUntil = 0;
-  }
-
   const extended = ext > extOnNow || zF > CFG.Z_ON;
   const retracted = ext < CFG.EXT_OFF && zF < CFG.Z_OFF;
   if (retracted || now - H.lastJudge > CFG.REARM_MS) H.armed = true;
@@ -928,16 +933,16 @@ function processHand(side, lm, now, canCount) {
   if (canCount && mode === "sequence") {
     // في التسلسل: أي لمسة للقفاز بذراع ممدودة تُحتسب مرة واحدة لكل هدف (judged يمنع التكرار)
     // نُبقي حدًا أدنى للسرعة حتى لا تُحتسب اليد الثابتة التي تمر فوق القفاز
-    if (extended && speed >= speedMinNow * 0.5 && judgeSequenceHit(side, fist.x, fist.y)) H.lastJudge = now;
+    if (extended && speed >= speedMinNow * 0.5 && judgeSequenceHit(side, fist.x, fist.y, ext, zF)) H.lastJudge = now;
   } else if (canCount && countTargetsOnly) {
     // الحرّ مع احتساب الأهداف فقط: لا تُحتسب اللكمة إلا إذا وصلت إلى هدف حي
-    if (extended && H.armed && speed >= speedMinNow * 0.8 && judgeTargetPunch(side, fist.x, fist.y)) { H.armed = false; H.lastJudge = now; }
+    if (extended && H.armed && speed >= speedMinNow * 0.8 && judgeTargetPunch(side, fist.x, fist.y, ext, zF)) { H.armed = false; H.lastJudge = now; }
   } else if (canCount && extended && speed >= speedMinNow) {
     if (H.armed && now - H.lastPunch >= CFG.COOLDOWN_MS) {
       H.armed = false;
       H.lastPunch = now;
       H.lastJudge = now;
-      registerPunch(side, fist.x, fist.y, now);
+      registerPunch(side, fist.x, fist.y, now, ext, zF);
     }
   }
 
@@ -970,13 +975,18 @@ function processHand(side, lm, now, canCount) {
                type: side === lead ? "jab" : "cross" };
     }
   }
+
+  // احفظ موضع القبضة في هذا الإطار حتى لا تُحتسب ملامسة الهدف أثناء رجوع اليد.
+  H.lastFistScreen = toScreen(fist.x, fist.y);
+  H.lastExt = ext;
+  H.lastZF = zF;
 }
 
 function handName(side) {
   return side === "left" ? t("hand_left") : t("hand_right");
 }
 
-function registerPunch(side, nx, ny, now) {
+function registerPunch(side, nx, ny, now, ext, zF) {
   // اليد الأمامية = الجاب، والخلفية = الكروس
   const lead = stance === "orthodox" ? "left" : "right";
   const type = side === lead ? "jab" : "cross";
@@ -987,9 +997,8 @@ function registerPunch(side, nx, ny, now) {
   stats[type]++;
   addFloater(`${handName(side)} · ${type === "jab" ? t("kind_jab") : t("kind_cross")}`, p.x, p.y, "#ffffff", "punch");
 
-  // نافذة تتبع قصيرة بعد الضربة (انظر processHand)
-  hands[side].contactUntil = now + 500;
-  if (!tryTargetHit(side, p)) tone(220, 0.07, 0.12, "square");
+  // لا نحتسب الإصابة إلا إذا اقتربت القبضة من الهدف أثناء حركة التمدد للأمام.
+  if (!tryTargetHit(side, p, ext, zF)) tone(220, 0.07, 0.12, "square");
   updateHud();
 }
 
@@ -1021,8 +1030,8 @@ function advanceSeq() {
 }
 
 // يحاول احتساب الضربة على الهدف؛ يعيد true إن كانت الضربة قد استُهلكت على هدف
-function tryTargetHit(side, p) {
-  const tgt = findTargetAt(p.x, p.y);
+function tryTargetHit(side, p, ext, zF) {
+  const tgt = findForwardTargetAt(side, p.x, p.y, ext, zF);
   if (!tgt) return false;
   if (tgt.seqMode && tgt.hand !== side) {
     stats.wrongHand++;
@@ -1035,9 +1044,9 @@ function tryTargetHit(side, p) {
 }
 
 // كل هدف يُحكم عليه مرة واحدة: اليد الصحيحة تحتسب إصابة، واليد الخاطئة تُسجَّل خطأً مرة واحدة فقط
-function judgeSequenceHit(side, nx, ny) {
+function judgeSequenceHit(side, nx, ny, ext, zF) {
   const p = toScreen(nx, ny);
-  const tgt = findTargetAt(p.x, p.y);
+  const tgt = findForwardTargetAt(side, p.x, p.y, ext, zF);
   if (!tgt || tgt.judged) return false;
   if (tgt.hand === side) {
     tgt.judged = true;
@@ -1059,9 +1068,9 @@ function judgeSequenceHit(side, nx, ny) {
 }
 
 // الوضع الحر مع احتساب الأهداف فقط: تُحتسب اللكمة إذا لامست هدفًا حيًا
-function judgeTargetPunch(side, nx, ny) {
+function judgeTargetPunch(side, nx, ny, ext, zF) {
   const p = toScreen(nx, ny);
-  const tgt = findTargetAt(p.x, p.y);
+  const tgt = findForwardTargetAt(side, p.x, p.y, ext, zF);
   if (!tgt || tgt.judged) return false;
   tgt.judged = true;
   const lead = stance === "orthodox" ? "left" : "right";
@@ -1188,11 +1197,21 @@ function targetPos(t) {
 function targetRadius(t) {
   return Math.min(cw, ch) * (0.035 + 0.13 * Math.pow(t.k, 1.3));
 }
-function findTargetAt(x, y) {
+function findForwardTargetAt(side, x, y, ext, zF) {
+  const H = hands[side];
+  const previous = H?.lastFistScreen;
+  // يلزم وجود موضع سابق، واقتراب واضح من مركز الهدف، مع استمرار تمدد الذراع/تقدمها.
+  if (!previous || H.lastExt == null || H.lastZF == null) return null;
+  const movingForward = ext > H.lastExt + 0.002 || zF > H.lastZF + 0.002;
+  if (!movingForward) return null;
+
   for (const t of targets) {
     if (t.state !== "live" || t.k < 0.12) continue;
-    const p = targetPos(t);
-    if (Math.hypot(x - p.x, y - p.y) <= targetRadius(t) * 1.3) return t;
+    const center = targetPos(t);
+    const nowDistance = Math.hypot(x - center.x, y - center.y);
+    const previousDistance = Math.hypot(previous.x - center.x, previous.y - center.y);
+    // نطاق إصابة أدق من السابق، مع اشتراط أن القبضة تقترب من الهدف لا تبتعد عنه.
+    if (nowDistance <= targetRadius(t) * 1.15 && nowDistance < previousDistance - 0.5) return t;
   }
   return null;
 }
@@ -1725,15 +1744,80 @@ el.btnClearHistory.addEventListener("click", clearHistory);
 el.btnHelp.addEventListener("click", () => (el.helpModal.hidden = false));
 el.btnCloseHelp.addEventListener("click", () => (el.helpModal.hidden = true));
 el.btnCoach.addEventListener("click", () => {
-  window.location.href = "coach-preview.html";
+  renderCoach();
+  el.coachModal.hidden = false;
+  el.coachChatStatus.textContent = lang === "en" ? "Local guide · answers stay on this device" : "دليل محلي · الإجابات تبقى على جهازك";
 });
 el.btnCloseCoach.addEventListener("click", () => (el.coachModal.hidden = true));
+document.querySelectorAll("[data-coach-prompt]").forEach(button => button.addEventListener("click", () => {
+  el.coachChatInput.value = button.dataset.coachPrompt || "";
+  el.coachChatForm.requestSubmit();
+}));
+
+function cleanCoachSources(list) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const source of list) {
+    if (out.length >= 5) break;
+    if (!source || typeof source.url !== "string") continue;
+    let url;
+    try { url = new URL(source.url); } catch { continue; }
+    if (url.protocol !== "https:" || seen.has(url.href)) continue;
+    seen.add(url.href);
+    const title = typeof source.title === "string" && source.title.trim()
+      ? source.title.trim().slice(0, 120)
+      : url.hostname;
+    out.push({ title, url: url.href });
+  }
+  return out;
+}
+
+function addCoachMessage(role, text, sources = []) {
+  const item = document.createElement("div");
+  item.className = "coach-message " + (role === "user" ? "coach-message-user" : "coach-message-assistant");
+  item.textContent = text;
+  const links = role === "assistant" ? cleanCoachSources(sources) : [];
+  if (links.length) {
+    const box = document.createElement("div");
+    box.className = "coach-sources";
+    const label = document.createElement("small");
+    label.textContent = lang === "en" ? "Sources" : "المصادر";
+    box.appendChild(label);
+    for (const source of links) {
+      const anchor = document.createElement("a");
+      anchor.href = source.url;
+      anchor.target = "_blank";
+      anchor.rel = "noopener noreferrer";
+      anchor.textContent = source.title;
+      box.appendChild(anchor);
+    }
+    item.appendChild(box);
+  }
+  el.coachChatMessages.appendChild(item);
+  el.coachChatMessages.scrollTop = el.coachChatMessages.scrollHeight;
+}
+
+el.coachChatForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const message = el.coachChatInput.value.trim();
+  if (!message || message.length > 1000) return;
+  addCoachMessage("user", message);
+  el.coachChatInput.value = "";
+  el.coachChatSend.disabled = true;
+  el.coachChatStatus.textContent = lang === "en" ? "Preparing local answer…" : "جارٍ تجهيز إجابة محلية…";
+  await new Promise(resolve => setTimeout(resolve, 180));
+  addCoachMessage("assistant", localCoachReply(message));
+  el.coachChatStatus.textContent = lang === "en"
+    ? "Local guide · no external AI service"
+    : "دليل محلي · لا يستخدم خدمة ذكاء اصطناعي خارجية";
+  el.coachChatSend.disabled = false;
+  el.coachChatInput.focus();
+});
 
 // الأقسام الأربعة في الرئيسية
 el.btnTraining.addEventListener("click", () => showScreen("trainMenu"));
-el.btnLearn.addEventListener("click", () => {
-  window.location.href = "learning-preview.html";
-});
+el.btnLearn.addEventListener("click", () => { showScreen("learn"); initBoxer3D(); });
 el.btnTrainBack.addEventListener("click", () => showScreen("home"));
 el.btnLearnBack.addEventListener("click", () => showScreen("home"));
 
@@ -1767,17 +1851,8 @@ el.btnAgain.addEventListener("click", async () => {
 });
 el.btnHome.addEventListener("click", () => exitTraining("home"));
 
-// شاشة الدخول: تظهر أول مرة فقط في الجلسة؛ الرجوع من المدرّب لا يعيدها
-try {
-  if (sessionStorage.getItem("shadowbox_entered_v1") === "1") {
-    el.splash.classList.add("hide");
-    el.splash.hidden = true;
-  }
-} catch {}
-
 // شاشة الدخول: الضغط عليها يفعّل الصوت ويشغّل نغمة الدخول
 el.splash.addEventListener("click", () => {
-  try { sessionStorage.setItem("shadowbox_entered_v1", "1"); } catch {}
   getAudio();
   tone(440, 0.15, 0.2, "sine");
   setTimeout(() => tone(660, 0.15, 0.2, "sine"), 150);
@@ -1798,6 +1873,244 @@ window.addEventListener("resize", () => {
 document.addEventListener("visibilitychange", () => {
   if (document.hidden && state === "round") setState("paused");
 });
+
+
+/* ---------- مدرّب محلي: يعمل دون API أو خادم خارجي ---------- */
+function localCoachReply(question) {
+  const q = String(question || "").toLowerCase();
+  const en = lang === "en";
+  const answers = {
+    safety: en
+      ? "Safety first: use a clear space, keep your phone securely mounted, warm up gently, and stop if you feel pain, dizziness, or unusual shortness of breath. Ask a qualified coach or trusted adult if you are unsure."
+      : "السلامة أولًا: اختر مساحة خالية، وثبّت الهاتف جيدًا، وابدأ بإحماء خفيف. توقّف إذا شعرت بألم أو دوخة أو ضيق نفس غير معتاد، واستشر مدربًا مؤهلًا أو شخصًا بالغًا تثق به عند الحاجة.",
+    warmup: en
+      ? "Try a gentle 5-minute warm-up: easy marching in place, relaxed shoulder circles, comfortable arm movements, and light steps. Keep it easy; this is preparation, not a test."
+      : "جرّب إحماءً خفيفًا لمدة 5 دقائق: المشي في المكان، وتحريك الكتفين بهدوء، وحركات مريحة للذراعين، وخطوات خفيفة. خليك على وتيرة سهلة؛ الهدف الاستعداد وليس اختبار قدرتك.",
+    fitness: en
+      ? "Build general fitness gradually: alternate comfortable movement with rest, keep a pace where you can still talk, and increase only one thing at a time. Consistency matters more than pushing hard."
+      : "طوّر لياقتك بالتدريج: بدّل بين حركة مريحة وراحة، واختر سرعة تستطيع معها الكلام، وزِد عاملًا واحدًا فقط كل مرة. الاستمرار أهم من الضغط على نفسك.",
+    recovery: en
+      ? "Recovery is part of training. Drink water regularly, eat normal balanced meals, get enough sleep, and take a rest day when you feel unusually tired. More training is not always better."
+      : "الراحة جزء من التدريب. اشرب الماء بانتظام، وتناول وجبات متوازنة، ونَمْ بما يكفي، وخذ يوم راحة إذا كان التعب غير معتاد. التدريب الأكثر ليس دائمًا الأفضل.",
+    camera: en
+      ? "For camera tracking, place the phone steadily, use bright light from in front of you, keep your whole upper body in frame, and allow camera permission. Tracking can still make mistakes, so treat the numbers as estimates."
+      : "لتحسين تتبّع الكاميرا: ثبّت الهاتف، واجعل الإضاءة أمامك، وأبقِ الجزء العلوي من جسمك ظاهرًا كاملًا، واسمح بإذن الكاميرا. قد يخطئ التتبّع أحيانًا، لذلك اعتبر الأرقام تقديرية.",
+    progress: en
+      ? "A useful progress check is how regularly you trained, how comfortable the session felt, and whether you recovered well. Do not judge a session by one number alone."
+      : "لمتابعة تقدمك، راقب انتظامك في التدريب، ومدى راحة الجلسة، وجودة تعافيك بعدها. لا تحكم على الجلسة من رقم واحد فقط.",
+    fallback: en
+      ? "I work offline, so my answers come from a small built-in guide rather than live AI. I can help with warm-ups, general fitness, camera setup, recovery, progress tracking, and safety. Try asking about one of those topics."
+      : "أنا مدرّب محلي يعمل دون إنترنت أو API، لذلك إجاباتي من دليل صغير مدمج وليست ذكاءً اصطناعيًا مباشرًا. أقدر أساعدك في الإحماء واللياقة العامة وإعداد الكاميرا والتعافي ومتابعة التقدم والسلامة. اسألني عن أحد هذه المواضيع."
+  };
+  if (/ألم|دوخ|سلام|إصاب|خطر|safety|pain|dizz|injur|unsafe/.test(q)) return answers.safety;
+  if (/إحماء|احماء|warm.?up|warmup|قبل التمرين/.test(q)) return answers.warmup;
+  if (/تعب|لياق|نفس|stamina|fitness|تحمل|تمرين/.test(q)) return answers.fitness;
+  if (/راحة|تعاف|نوم|ماء|recovery|rest|sleep|water/.test(q)) return answers.recovery;
+  if (/كاميرا|camera|إضاءة|إضائه|تتبع|tracking|لا تحسب|ما تحسب/.test(q)) return answers.camera;
+  if (/تقدم|نتيجة|إحصاء|احصاء|progress|stats|تحسن/.test(q)) return answers.progress;
+  if (/كومبو|combo|جاب|كروس|jab|cross|ضرب|لكم|punch|دفاع|حراسة|مراوغ|dodge|weav|footwork|حركة القدم/.test(q)) {
+    return en
+      ? "I can’t coach striking techniques or fight tactics. I can help you train safely without contact: warm-ups, balance, general conditioning, recovery, and how to set up the app."
+      : "ما أقدر أشرح تقنيات الضرب أو تكتيكات القتال. أقدر أساعدك بتدريب آمن دون احتكاك: الإحماء والتوازن واللياقة العامة والتعافي وإعداد التطبيق.";
+  }
+  return answers.fallback;
+}
+
+/* ---------- شخصية ملاكم بشرية ثلاثية الأبعاد ---------- */
+let boxer3d = null;
+let boxer3dFrame = 0;
+let boxer3dResize = null;
+let boxer3dMove = "jab";
+
+async function initBoxer3D() {
+  const host = document.getElementById("boxer3dStage");
+  const status = document.getElementById("boxer3dStatus");
+  if (!host) return;
+  if (boxer3d) { resizeBoxer3D(); return; }
+
+  try {
+    const THREE = await import("https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js");
+    const { GLTFLoader } = await import("https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js");
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color("#111016");
+    scene.fog = new THREE.Fog("#111016", 7, 15);
+
+    const camera = new THREE.PerspectiveCamera(31, 1, 0.1, 100);
+    camera.position.set(0, 1.15, 5.8);
+    camera.lookAt(0, 0.15, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    renderer.setSize(host.clientWidth || 320, host.clientHeight || 300);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    host.insertBefore(renderer.domElement, host.firstChild);
+
+    scene.add(new THREE.HemisphereLight(0xdce6ff, 0x241018, 2.2));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.6);
+    keyLight.position.set(-3, 5, 4);
+    keyLight.castShadow = true;
+    scene.add(keyLight);
+    const rim = new THREE.PointLight(0x7865ff, 18, 9);
+    rim.position.set(2, 2.5, -1);
+    scene.add(rim);
+
+    const floor = new THREE.Mesh(
+      new THREE.CircleGeometry(2.2, 48),
+      new THREE.MeshStandardMaterial({ color: 0x1b1a24, roughness: 0.92 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -1.31;
+    floor.scale.set(1.1, 0.7, 1);
+    scene.add(floor);
+    const grid = new THREE.GridHelper(5, 18, 0x3b3447, 0x292430);
+    grid.position.y = -1.3;
+    scene.add(grid);
+
+    if (status) status.textContent = "جارٍ تحميل شخصية الملاكم البشرية…";
+    const loader = new GLTFLoader();
+    const gltf = await loader.loadAsync("https://threejs.org/examples/models/gltf/Xbot.glb");
+    const avatar = gltf.scene;
+    avatar.name = "ShadowBoxHumanBoxer";
+    avatar.traverse((obj) => {
+      if (obj.isMesh) {
+        obj.castShadow = true;
+        obj.receiveShadow = true;
+        if (obj.material) {
+          obj.material.needsUpdate = true;
+        }
+      }
+    });
+
+    const initialBounds = new THREE.Box3().setFromObject(avatar);
+    const modelHeight = Math.max(0.1, initialBounds.max.y - initialBounds.min.y);
+    avatar.scale.setScalar(2.55 / modelHeight);
+    const scaledBounds = new THREE.Box3().setFromObject(avatar);
+    avatar.position.y = -1.3 - scaledBounds.min.y;
+    avatar.rotation.y = 0;
+    scene.add(avatar);
+
+    const findBone = (...parts) => {
+      let found = null;
+      avatar.traverse((obj) => {
+        if (found || !obj.isBone) return;
+        const n = obj.name.toLowerCase().replace(/[^a-z]/g, "");
+        if (parts.every((p) => n.includes(p))) found = obj;
+      });
+      return found;
+    };
+    const leftArm = findBone("leftarm");
+    const rightArm = findBone("rightarm");
+    const leftForeArm = findBone("leftforearm") || findBone("leftfore");
+    const rightForeArm = findBone("rightforearm") || findBone("rightfore");
+    const leftHand = findBone("lefthand");
+    const rightHand = findBone("righthand");
+    const spine = findBone("spine");
+    const hips = findBone("hips");
+
+    const gloveMaterial = new THREE.MeshStandardMaterial({
+      color: 0xe11d2e, roughness: 0.42, metalness: 0.04
+    });
+    const addGlove = (hand) => {
+      if (!hand) return;
+      const glove = new THREE.Mesh(new THREE.SphereGeometry(0.105, 20, 16), gloveMaterial);
+      glove.scale.set(1.05, 0.9, 1.25);
+      glove.position.set(0, 0, 0.075);
+      glove.castShadow = true;
+      hand.add(glove);
+    };
+    addGlove(leftHand);
+    addGlove(rightHand);
+
+    const mixer = new THREE.AnimationMixer(avatar);
+    const idleClip = gltf.animations.find((clip) => /idle/i.test(clip.name)) || gltf.animations[0];
+    if (idleClip) {
+      const idle = mixer.clipAction(idleClip);
+      idle.play();
+    }
+    const baseRotations = new Map();
+    [leftArm, rightArm, leftForeArm, rightForeArm, spine, hips].filter(Boolean).forEach((bone) => {
+      baseRotations.set(bone, bone.rotation.clone());
+    });
+
+    boxer3d = { THREE, scene, camera, renderer, host, avatar, mixer, leftArm, rightArm,
+      leftForeArm, rightForeArm, spine, hips, baseRotations, clock: new THREE.Clock() };
+    if (status) status.remove();
+
+    if (boxer3dResize) window.removeEventListener("resize", boxer3dResize);
+    boxer3dResize = () => resizeBoxer3D();
+    window.addEventListener("resize", boxer3dResize);
+
+    document.querySelectorAll("[data-move3d]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        boxer3dMove = btn.dataset.move3d || "jab";
+        document.querySelectorAll("[data-move3d]").forEach((b) => b.classList.toggle("active", b === btn));
+        const hints = {
+          jab: "الجاب: مدّ اليد الأمامية للأمام بسرعة، وأعدها مباشرة إلى الحراسة.",
+          cross: "الكروس: لفّ الجذع برفق ومدّ اليد الخلفية، ثم ارجع إلى وضع الحراسة.",
+          guard: "الحراسة: ارفع القفازين قرب الخدين وأبقِ المرفقين قريبين من الجسم.",
+          dodge: "المراوغة: اثنِ الركبتين قليلًا وحرّك الرأس والجذع إلى الجانب."
+        };
+        const hint = document.getElementById("boxer3dHint");
+        if (hint) hint.textContent = hints[boxer3dMove] || hints.jab;
+      });
+    });
+
+    const animate = () => {
+      if (!boxer3d) return;
+      boxer3dFrame = requestAnimationFrame(animate);
+      const delta = boxer3d.clock.getDelta();
+      const t = boxer3d.clock.elapsedTime;
+      const phase = (t % 1.55) / 1.55;
+      const punch = phase < 0.48 ? Math.sin((phase / 0.48) * Math.PI) : 0;
+
+      boxer3d.mixer.update(Math.min(0.04, delta));
+      const b = boxer3d;
+
+      // Subtle boxing guard, then the selected movement. The full rig remains skinned.
+      if (b.leftArm) b.leftArm.rotation.x -= boxer3dMove === "guard" ? 0.7 : 0.38;
+      if (b.rightArm) b.rightArm.rotation.x -= boxer3dMove === "guard" ? 0.7 : 0.38;
+      if (b.leftForeArm) b.leftForeArm.rotation.x -= 0.25;
+      if (b.rightForeArm) b.rightForeArm.rotation.x -= 0.25;
+
+      if (boxer3dMove === "jab" && b.leftArm) {
+        b.leftArm.rotation.x -= 0.72 * punch;
+        if (b.leftForeArm) b.leftForeArm.rotation.x -= 0.18 * punch;
+        b.avatar.rotation.y = -0.08 - 0.12 * punch;
+      } else if (boxer3dMove === "cross" && b.rightArm) {
+        b.rightArm.rotation.x -= 0.78 * punch;
+        if (b.rightForeArm) b.rightForeArm.rotation.x -= 0.16 * punch;
+        b.avatar.rotation.y = 0.08 + 0.14 * punch;
+      } else if (boxer3dMove === "guard") {
+        b.avatar.rotation.y = -0.08;
+      } else if (boxer3dMove === "dodge") {
+        b.avatar.position.x = Math.sin(t * 2.5) * 0.16;
+        b.avatar.rotation.z = Math.sin(t * 2.5) * 0.055;
+        if (b.spine) b.spine.rotation.z += Math.sin(t * 2.5) * 0.08;
+      }
+      if (boxer3dMove !== "dodge") {
+        b.avatar.position.x = 0;
+        b.avatar.rotation.z = 0;
+      }
+      if (boxer3dMove !== "jab" && boxer3dMove !== "cross") b.avatar.rotation.y = -0.08;
+      renderer.render(scene, camera);
+    };
+    animate();
+  } catch (err) {
+    if (status) status.textContent = "تعذّر تحميل الشخصية البشرية. تأكد من اتصال الإنترنت ثم أعد فتح قسم التعلّم.";
+    console.error("3D human boxer failed to load", err);
+  }
+}
+
+function resizeBoxer3D() {
+  if (!boxer3d) return;
+  const w = boxer3d.host.clientWidth || 320;
+  const h = boxer3d.host.clientHeight || 300;
+  boxer3d.camera.aspect = w / h;
+  boxer3d.camera.updateProjectionMatrix();
+  boxer3d.renderer.setSize(w, h);
+}
 
 // ---------- التهيئة ----------
 applyPrefs();
