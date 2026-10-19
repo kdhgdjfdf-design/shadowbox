@@ -51,7 +51,7 @@ function applyLanguage() {
   modal.querySelector(".health-hero p").textContent = t.heroText;
   document.getElementById("bodyInfoTitle").textContent = t.bodyTitle;
   modal.querySelector(".health-card-title p").textContent = t.bodySub;
-  ageInput.previousElementSibling && (ageInput.parentElement.firstChild.textContent = t.age);
+  ageInput.parentElement.firstChild.textContent = t.age;
   heightInput.parentElement.firstChild.textContent = t.height;
   weightInput.parentElement.firstChild.textContent = t.weight;
   reviewButton.textContent = t.review;
