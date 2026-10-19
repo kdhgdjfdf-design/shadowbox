@@ -31,3 +31,19 @@
 .health-tip p { margin:0;color:#bac9c1;font-size:13px;line-height:1.8; }
 .health-footer-note { text-align:center;padding:0 7px 8px; }
 @media(max-width:360px){.health-fields{gap:6px}.health-fields label{font-size:11px}.health-fields input{padding:0 6px}.health-hero h3{font-size:20px}}
+
+/* Expandable health topics */
+.health-topic { display:block; padding:0; overflow:hidden; }
+.health-topic > summary { display:flex;align-items:center;gap:12px;list-style:none;cursor:pointer;padding:16px;min-height:78px; }
+.health-topic > summary::-webkit-details-marker { display:none; }
+.health-topic > summary > div { flex:1;min-width:0; }
+.health-topic > summary h3 { margin:0 0 5px;color:#e8f6ee;font-size:16px; }
+.health-topic > summary p { margin:0;color:#bac9c1;font-size:12px;line-height:1.7; }
+.health-chevron { color:#a3e3c6;font-size:24px;transition:transform .18s ease; }
+.health-topic[open] .health-chevron { transform:rotate(180deg); }
+.health-topic-body { padding:0 16px 16px; }
+.health-topic-body article { margin-top:10px;padding:12px;border:1px solid #293a34;border-radius:12px;background:#0d1411; }
+.health-topic-body h4 { margin:0 0 7px;color:#a3e3c6;font-size:14px; }
+.health-topic-body p { margin:5px 0 0;color:#c6d3cc;font-size:13px;line-height:1.85; }
+.health-topic-body b { color:#edf8f1; }
+.health-note { margin:12px 0 0;padding:10px;border-radius:10px;background:#18251f;color:#b8d9c8;font-size:12px;line-height:1.8; }
