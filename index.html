@@ -7,6 +7,7 @@
   <meta name="description" content="ShadowBox Nox - shadow boxing trainer with your phone camera. تدريب الملاكمة الافتراضي بكاميرا هاتفك." />
   <title>ShadowBox Nox 🥊</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="health.css?v=1" />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icon-192.png" />
 </head>
@@ -52,6 +53,11 @@
       <button id="btnHistory" class="nav-bar nav-activity">
         <span class="mode-logo">📊</span>
         <span class="mode-text"><b data-i18n="nav_activity">سجل النشاط</b><small data-i18n="nav_activity_desc"></small></span>
+        <span class="mode-arrow"></span>
+      </button>
+          <button id="btnHealth" class="nav-bar nav-health" type="button">
+        <span class="mode-logo">🌿</span>
+        <span class="mode-text"><b>الصحة والتغذية</b><small>عادات صحية ومعلومات الجسم</small></span>
         <span class="mode-arrow"></span>
       </button>
     </nav>
@@ -278,6 +284,70 @@
     </div>
   </main>
 
+  <!-- ============ الصحة والتغذية ============ -->
+  <div id="healthModal" class="overlay modal health-fullscreen" hidden>
+    <section class="health-app" aria-labelledby="healthTitle">
+      <header class="health-header">
+        <button id="btnCloseHealth" class="health-back" type="button" aria-label="رجوع">‹</button>
+        <div class="health-mark">🌿</div>
+        <div><h2 id="healthTitle">الصحة والتغذية</h2><p>دعم التعافي والعادات اليومية</p></div>
+      </header>
+      <div class="health-content">
+        <section class="health-hero">
+          <span class="health-eyebrow">SHADOWBOX NOX · WELLNESS</span>
+          <h3>قوّتك تبدأ من عاداتك</h3>
+          <p>معلومات مبسطة تساعدك على الاهتمام بالنوم، والطعام، والماء، والتعافي إلى جانب التدريب.</p>
+        </section>
+        <section class="health-card" aria-labelledby="bodyInfoTitle">
+          <div class="health-card-title"><span>🧍</span><div><h3 id="bodyInfoTitle">معلومات الجسم</h3><p>أدخل القياسات إن أردت عرضها فقط.</p></div></div>
+          <div class="health-fields">
+            <label>العمر (سنة)<input id="healthAge" type="number" inputmode="numeric" min="10" max="19" placeholder="XX" /></label>
+            <label>الطول (سم)<input id="healthHeight" type="number" inputmode="decimal" min="80" max="230" placeholder="XX" /></label>
+            <label>الوزن (كغ)<input id="healthWeight" type="number" inputmode="decimal" min="10" max="250" placeholder="XX" /></label>
+          </div>
+          <button id="btnReviewBody" class="health-primary" type="button">عرض ملخص القياسات</button>
+          <p id="healthBodyResult" class="health-result" role="status" aria-live="polite">القيم المعروضة تجريبية ويمكنك تغييرها. لم يتم إجراء أي تشخيص.</p>
+          <p class="health-disclaimer">في سن النمو لا تكفي قياسات الطول والوزن وحدها للحكم على الصحة؛ يفسّر المختص نمو المراهق باستخدام العمر والجنس ومخططات النمو والسياق الصحي. هذا القسم ليس أداة تشخيص.</p>
+        </section>
+        <div class="health-section-label">عادات تدعم التدريب — اضغط على كل قسم للتفاصيل</div>
+        <details class="health-card health-tip health-topic">
+          <summary><span class="health-icon">🍽️</span><div><h3>التغذية المتوازنة</h3><p>افتح القسم لمعرفة أمثلة على الطعام وفوائد كل مجموعة.</p></div><span class="health-chevron">⌄</span></summary>
+          <div class="health-topic-body">
+            <article><h4>🥚 البروتين</h4><p><b>أمثلة:</b> البيض، السمك، الدجاج، اللبن والزبادي، العدس، الحمص والفاصولياء.</p><p><b>الفوائد:</b> يساعد على بناء العضلات وإصلاح الأنسجة ودعم النمو والتعافي بعد التدريب.</p></article>
+            <article><h4>🍚 الكربوهيدرات</h4><p><b>أمثلة:</b> الشوفان، الخبز، الأرز، البطاطا، المعكرونة، الذرة والفواكه.</p><p><b>الفوائد:</b> مصدر مهم للطاقة التي يحتاجها الدماغ والعضلات أثناء الدراسة والتمرين.</p></article>
+            <article><h4>🥑 الدهون المفيدة</h4><p><b>أمثلة:</b> زيت الزيتون، المكسرات، البذور، الأفوكادو والأسماك الدهنية.</p><p><b>الفوائد:</b> تساعد الجسم على امتصاص بعض الفيتامينات وتدعم الخلايا والنمو الطبيعي.</p></article>
+            <article><h4>🥦 الخضار والفواكه</h4><p><b>أمثلة:</b> البرتقال، التفاح، الجزر، الطماطم، السبانخ والخضار الموسمية.</p><p><b>الفوائد:</b> توفر الفيتامينات والمعادن والألياف التي تدعم الهضم والصحة العامة.</p></article>
+            <p class="health-note">لا تحتاج إلى طعام مثالي في كل وجبة؛ نوّع ما تأكله وتناول وجبات كافية ومنتظمة، ولا تتبع حمية قاسية أثناء النمو.</p>
+          </div>
+        </details>
+        <details class="health-card health-tip health-topic">
+          <summary><span class="health-icon">💧</span><div><h3>الماء والترطيب</h3><p>احتياجات الماء تختلف حسب الجو والحركة والتعرّق.</p></div><span class="health-chevron">⌄</span></summary>
+          <div class="health-topic-body">
+            <article><h4>🚰 كم أشرب؟</h4><p>اشرب بانتظام خلال اليوم، ومع الوجبات، وخذ رشفات قبل التمرين وأثناءه وبعده. لا توجد كمية واحدة تناسب الجميع؛ تزداد الحاجة مع الحرّ والتعرّق وطول النشاط.</p></article>
+            <article><h4>🥤 ماذا أختار؟</h4><p>اجعل الماء خيارك الأساسي. قلّل المشروبات الغازية المحلّاة ومشروبات الطاقة؛ فغالبًا تحتوي على سكر كثير، وقد تضيف سعرات دون فائدة غذائية كبيرة، والكافيين في مشروبات الطاقة قد يضر نوم المراهقين.</p></article>
+            <article><h4>⚠️ انتبه</h4><p>لا تجبر نفسك على شرب لترات كثيرة بسرعة. اشرب حسب العطش والظروف، وفي التدريب الطويل أو الحر الشديد خذ فترات راحة في مكان بارد وأخبر شخصًا بالغًا إذا شعرت بدوار.</p></article>
+          </div>
+        </details>
+        <details class="health-card health-tip health-topic">
+          <summary><span class="health-icon">🌙</span><div><h3>النوم والتعافي</h3><p>الراحة جزء من التدريب، وليست وقتًا ضائعًا.</p></div><span class="health-chevron">⌄</span></summary>
+          <div class="health-topic-body">
+            <article><h4>😴 النوم</h4><p>يحتاج معظم المراهقين إلى 8–10 ساعات من النوم كل ليلة. حاول تثبيت موعد النوم، وابتعد عن الهاتف قبل النوم إذا كان يشتتك.</p><p><b>الفوائد:</b> يساعد النوم على التركيز والتعلّم وتنظيم المزاج والتعافي البدني.</p></article>
+            <article><h4>🧘 الراحة بين الجلسات</h4><p>بدّل بين أيام التدريب والراحة أو النشاط الخفيف، وخفف الجهد إذا كنت مرهقًا أو مريضًا.</p><p><b>الفوائد:</b> يمنح الجسم وقتًا للتعافي ويساعدك على الاستمرار بأمان.</p></article>
+          </div>
+        </details>
+        <details class="health-card health-tip health-topic">
+          <summary><span class="health-icon">🥊</span><div><h3>تدريب آمن</h3><p>ابدأ بالتدريج واهتم بالتقنية قبل السرعة.</p></div><span class="health-chevron">⌄</span></summary>
+          <div class="health-topic-body">
+            <article><h4>🔥 قبل التدريب</h4><p>قم بإحماء خفيف، تأكد من وجود مساحة خالية حولك، وثبّت الهاتف بعيدًا عن مسار الحركة.</p><p><b>الفوائد:</b> يساعد الإحماء التدريجي على تجهيز الجسم للحركة.</p></article>
+            <article><h4>🛡️ أثناء التدريب</h4><p>حافظ على المعصم مستقيمًا عند اللكم في الهواء، ولا تضرب جدارًا أو سطحًا صلبًا. زد المدة والسرعة تدريجيًا.</p></article>
+            <article><h4>🛑 متى أتوقف؟</h4><p>توقف عند الألم أو الدوار أو ضيق النفس غير المعتاد، وأخبر شخصًا بالغًا تثق به إذا استمرت الأعراض أو أقلقتك.</p></article>
+          </div>
+        </details>
+        <p class="health-footer-note">محتوى تثقيفي عام، وليس بديلًا عن الطبيب أو اختصاصي التغذية. لا تُرسل القياسات إلى أي خدمة؛ الحساب محلي داخل المتصفح.</p>
+      </div>
+    </section>
+  </div>
+
   <!-- ============ الإعدادات ============ -->
   <div id="settingsModal" class="overlay modal" hidden>
     <div class="sheet wide">
@@ -343,5 +413,6 @@
   </div>
 
   <script src="script.js" type="module"></script>
+  <script type="module" src="health.js?v=1"></script>
 </body>
 </html>
