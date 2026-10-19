@@ -915,3 +915,80 @@ body.hide-stats .grid { display: none; }
 .nav-activity { --accent1: #f97316; --accent2: #7c2d12; }
 .nav-bar .mode-text b { font-size: 20px; font-weight: 900; }
 .nav-bar .mode-text small { font-size: 13px; line-height: 1.5; opacity: 0.9; }
+
+
+/* ===== AI Coach chat ===== */
+.coach-chat { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.coach-chat-messages { display: flex; flex-direction: column; gap: 10px; max-height: 280px; overflow-y: auto; margin: 12px 0; }
+.coach-message { max-width: 92%; padding: 11px 13px; border: 1px solid var(--line); border-radius: 14px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; }
+.coach-message-user { align-self: flex-end; background: #2e1065; color: #fff; }
+.coach-message-assistant { align-self: flex-start; background: var(--panel-2); color: var(--text); }
+.coach-chat-form { display: flex; flex-direction: column; gap: 9px; }
+.coach-chat-form textarea { width: 100%; min-height: 58px; resize: vertical; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font: inherit; }
+.coach-chat-form button:disabled { opacity: .6; cursor: wait; }
+.coach-sources { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--line); }
+.coach-sources small { width: 100%; color: var(--muted); font-size: 11px; }
+.coach-sources a { display: inline-block; max-width: 100%; padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; color: var(--accent1, #a78bfa); font-size: 12px; text-decoration: underline; overflow-wrap: anywhere; }
+
+
+/* ===== Animated beginner boxing demos ===== */
+.move-demo{margin-top:14px;padding:12px;border:1px solid #303030;border-radius:14px;background:radial-gradient(circle at 50% 20%,#251014,#101010 75%);text-align:center}
+.move-demo-title{margin:0 0 8px;color:#ffd6d6;font-size:14px;font-weight:800}
+.boxer-demo{display:block;width:min(100%,260px);height:auto;margin:0 auto}
+.demo-head{fill:#e7b48e;stroke:#f5d0b5;stroke-width:2}
+.demo-limb,.demo-arm{fill:none;stroke:#d9d9e0;stroke-width:8;stroke-linecap:round;stroke-linejoin:round}
+.demo-arm{stroke:#ff6b75;stroke-width:7}
+.demo-glove{fill:#e11d2e;stroke:#ff9aa2;stroke-width:2}
+.demo-floor{stroke:#555;stroke-width:2;stroke-linecap:round}
+.demo-arrow{fill:none;stroke:#ffd166;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:4 5}
+.demo-jab-arm{transform-origin:120px 58px;animation:demo-jab 2.2s ease-in-out infinite}
+.demo-cross-arm{transform-origin:120px 58px;animation:demo-cross 2.2s ease-in-out infinite}
+.demo-footwork .demo-legs{animation:demo-step 2.4s ease-in-out infinite}
+.demo-dodge .demo-head{transform-box:fill-box;transform-origin:center;animation:demo-weave 2.2s ease-in-out infinite}
+.move-demo small{display:block;color:#bdbdc5;font-size:12px;line-height:1.7;margin-top:5px}
+@keyframes demo-jab{0%,15%,100%{transform:translate(0,0)}35%,48%{transform:translate(-18px,-3px)}65%{transform:translate(0,0)}}
+@keyframes demo-cross{0%,48%,100%{transform:translate(0,0)}65%,78%{transform:translate(18px,-9px)}90%{transform:translate(0,0)}}
+@keyframes demo-step{0%,100%{transform:translateX(0)}35%,60%{transform:translateX(9px)}80%{transform:translateX(-4px)}}
+@keyframes demo-weave{0%,100%{transform:translateX(0) translateY(0)}35%,55%{transform:translateX(-12px) translateY(7px)}75%{transform:translateX(10px) translateY(3px)}}
+@media(prefers-reduced-motion:reduce){.demo-jab-arm,.demo-cross-arm,.demo-footwork .demo-legs,.demo-dodge .demo-head{animation:none}}
+
+
+/* ===== Full-screen AI coach, mobile chat layout ===== */
+.coach-fullscreen { position:fixed; inset:0; z-index:120; padding:0; background:#09090d; backdrop-filter:none; -webkit-backdrop-filter:none; }
+.coach-fullscreen .coach-app { width:100%; height:100%; height:100dvh; max-width:760px; margin:0 auto; display:flex; flex-direction:column; background:radial-gradient(circle at 50% -15%,#25183a 0,#101016 38%,#0b0b10 78%); overflow:hidden; }
+.coach-app-header { display:flex; align-items:center; gap:11px; padding:calc(env(safe-area-inset-top) + 12px) 15px 13px; border-bottom:1px solid #292632; flex-shrink:0; }
+.coach-back { width:38px;height:38px;border:1px solid #393542;border-radius:50%;background:#1c1a23;color:#fff;font-size:30px;line-height:1;cursor:pointer; }
+.coach-avatar { width:43px;height:43px;display:grid;place-items:center;border-radius:15px;background:linear-gradient(145deg,#6334a5,#251642);font-size:23px;box-shadow:0 0 24px #6935a533; }
+.coach-heading { display:flex;flex-direction:column;gap:3px;min-width:0;flex:1; }
+.coach-heading strong {font-size:16px;color:#fff}.coach-heading small{font-size:11px;color:#aaa5b8}
+.coach-online {font-size:11px;color:#b8f3d2;white-space:nowrap}.coach-online i{display:inline-block;width:7px;height:7px;border-radius:50%;background:#5ce1a1;margin-left:4px}
+.coach-summary {max-height:22vh;overflow:auto;padding:0 14px;flex-shrink:0}.coach-summary:empty{display:none}
+.coach-status {padding:8px 16px 0;color:#9994a7;font-size:11px;flex-shrink:0}
+.coach-full-messages {flex:1;min-height:0;max-height:none!important;overflow-y:auto;padding:16px 15px 10px;margin:0;scroll-behavior:smooth}
+.coach-full-messages .coach-message {max-width:88%;padding:13px 15px;border-radius:18px;font-size:15px;line-height:1.75;box-shadow:0 4px 18px #0002}
+.coach-full-messages .coach-message-user {border-bottom-right-radius:5px;background:linear-gradient(135deg,#6534a8,#452176)}
+.coach-full-messages .coach-message-assistant {border-bottom-left-radius:5px;background:#1b1a22;border-color:#302d3a}
+.coach-suggestions {display:flex;gap:8px;padding:9px 13px;overflow-x:auto;flex-shrink:0;scrollbar-width:none}
+.coach-suggestions button {white-space:nowrap;border:1px solid #383142;background:#191620;color:#d8c7f7;border-radius:999px;padding:9px 12px;font:inherit;font-size:12px}
+.coach-chat-form.coach-full-form {display:flex;flex-direction:row;align-items:flex-end;gap:9px;padding:10px 13px calc(env(safe-area-inset-bottom) + 8px);border-top:1px solid #292632;background:#0d0c12;flex-shrink:0}
+.coach-full-form textarea {min-height:48px;max-height:120px;resize:none;border-radius:24px;padding:12px 16px;background:#1a1821;border-color:#383342;font-size:15px;line-height:1.5}
+.coach-send {flex:0 0 48px;width:48px;height:48px;border:0;border-radius:50%;background:linear-gradient(145deg,#9b64e9,#5b2da0);color:#fff;font-size:24px;font-weight:800}
+.coach-send:disabled {opacity:.45}
+.coach-privacy-note {margin:0;padding:0 10px 4px;text-align:center;color:#777182;font-size:10px;flex-shrink:0}
+[dir="ltr"] .coach-send {transform:scaleX(-1)}
+/* ===== Procedural 3D boxing avatar ===== */
+.three-d-card {overflow:hidden;background:linear-gradient(155deg,#17151e,#111014)}
+.three-d-heading {display:flex;align-items:center;justify-content:space-between;gap:10px}
+.three-d-heading h2 {margin:3px 0 0;color:#f7f3ff}
+.eyebrow {font-size:9px;letter-spacing:2px;color:#a995d1;font-weight:900}
+.live-dot {font-size:11px;color:#83efbb;border:1px solid #305b47;border-radius:999px;padding:5px 9px;white-space:nowrap}
+.three-d-subtitle {font-size:13px;color:#aaa5b4;line-height:1.6;margin:8px 0 12px}
+.boxer-3d-stage {position:relative;width:100%;height:310px;overflow:hidden;border:1px solid #322c3b;border-radius:16px;background:radial-gradient(ellipse at 50% 42%,#292033,#111016 72%);isolation:isolate}
+.boxer-3d-stage canvas {display:block;width:100%;height:100%;touch-action:pan-y}
+.three-d-loading {position:absolute;inset:0;display:grid;place-items:center;padding:20px;text-align:center;color:#d8c6f4;font-size:13px;z-index:1}
+.move-selector {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:12px}
+.move-select {min-height:43px;border:1px solid #383342;border-radius:12px;background:#1c1923;color:#d2cddd;font:inherit;font-size:13px;font-weight:750}
+.move-select.active {background:linear-gradient(135deg,#8a42d3,#51217e);border-color:#b17de4;color:#fff;box-shadow:0 5px 15px #7a39b533}
+.three-d-hint {min-height:2.8em;margin:10px 2px 0;color:#c2b8d2;font-size:13px;line-height:1.65}
+@media(max-width:380px){.boxer-3d-stage{height:270px}.move-selector{gap:5px}.move-select{font-size:12px;padding:0 3px}.coach-heading small{font-size:10px}}
+@media(prefers-reduced-motion:reduce){.coach-full-messages{scroll-behavior:auto}}
