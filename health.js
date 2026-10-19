@@ -41,10 +41,122 @@ const copy = {
     back:"Back", navTitle:"Health & Nutrition", navSub:"Healthy habits and body information"
   }
 };
+
+// Navigation: a section menu plus separate detail pages with one-step back.
+let currentHealthView = "menu";
+let healthMenuView = null;
+const healthDetailViews = new Map();
+
+function setupHealthNavigation() {
+  const contentArea = modal.querySelector(".health-content");
+  if (!contentArea || contentArea.dataset.navigationReady === "true") return;
+  contentArea.dataset.navigationReady = "true";
+
+  const hero = contentArea.querySelector(".health-hero");
+  const bodyCard = contentArea.querySelector("#bodyInfoTitle")?.closest(".health-card");
+  const topics = [...contentArea.querySelectorAll("details.health-topic")];
+  const footer = contentArea.querySelector(".health-footer-note");
+  const items = [];
+
+  if (bodyCard) items.push({
+    id: "body", node: bodyCard, icon: "🧍",
+    title: bodyCard.querySelector("h3")?.textContent || "معلومات الجسم",
+    description: bodyCard.querySelector(".health-card-title p")?.textContent || "عرض معلومات الجسم"
+  });
+  topics.forEach((node, index) => {
+    const summary = node.querySelector("summary");
+    items.push({
+      id: "topic-" + index, node,
+      icon: summary?.querySelector(".health-icon")?.textContent || "🌿",
+      title: summary?.querySelector("h3")?.textContent || "معلومات صحية",
+      description: summary?.querySelector("p")?.textContent || "افتح لعرض المعلومات"
+    });
+    node.open = true;
+  });
+
+  healthMenuView = document.createElement("div");
+  healthMenuView.className = "health-view health-menu-view";
+  if (hero) healthMenuView.appendChild(hero);
+  const intro = document.createElement("p");
+  intro.className = "health-menu-hint";
+  intro.textContent = languageSelect?.value === "en"
+    ? "Choose a topic to open its information."
+    : "اختر موضوعًا لفتح صفحة المعلومات الخاصة به.";
+  healthMenuView.appendChild(intro);
+
+  const list = document.createElement("div");
+  list.className = "health-menu-list";
+  items.forEach((item) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "health-menu-item";
+    button.innerHTML = '<span class="health-menu-icon"></span><span class="health-menu-copy"><b></b><small></small></span><span class="health-menu-arrow" aria-hidden="true">‹</span>';
+    button.querySelector(".health-menu-icon").textContent = item.icon;
+    button.querySelector("b").textContent = item.title;
+    button.querySelector("small").textContent = item.description;
+    button.addEventListener("click", () => showHealthDetail(item.id));
+    list.appendChild(button);
+
+    const page = document.createElement("section");
+    page.className = "health-view health-detail-view";
+    page.hidden = true;
+    page.dataset.healthPage = item.id;
+    const pageHead = document.createElement("div");
+    pageHead.className = "health-detail-heading";
+    const back = document.createElement("button");
+    back.type = "button";
+    back.className = "health-detail-back";
+    back.textContent = languageSelect?.value === "en" ? "‹ Back to topics" : "‹ رجوع إلى المواضيع";
+    back.addEventListener("click", showHealthMenu);
+    const title = document.createElement("h3");
+    title.textContent = item.title;
+    pageHead.append(back, title);
+    page.appendChild(pageHead);
+    page.appendChild(item.node);
+    contentArea.appendChild(page);
+    healthDetailViews.set(item.id, page);
+  });
+  healthMenuView.appendChild(list);
+  if (footer) healthMenuView.appendChild(footer);
+  contentArea.prepend(healthMenuView);
+  currentHealthView = "menu";
+}
+
+function showHealthMenu() {
+  currentHealthView = "menu";
+  if (healthMenuView) healthMenuView.hidden = false;
+  healthDetailViews.forEach((page) => { page.hidden = true; });
+  const scroller = modal.querySelector(".health-content");
+  if (scroller) scroller.scrollTop = 0;
+  closeButton.setAttribute("aria-label", languageSelect?.value === "en" ? "Back to home" : "رجوع إلى الرئيسية");
+}
+
+function showHealthDetail(id) {
+  if (!healthDetailViews.has(id)) return;
+  currentHealthView = id;
+  if (healthMenuView) healthMenuView.hidden = true;
+  healthDetailViews.forEach((page, key) => { page.hidden = key !== id; });
+  const scroller = modal.querySelector(".health-content");
+  if (scroller) scroller.scrollTop = 0;
+  closeButton.setAttribute("aria-label", languageSelect?.value === "en" ? "Back to topics" : "رجوع إلى المواضيع");
+}
+
+function goBackHealth() {
+  if (currentHealthView !== "menu") {
+    showHealthMenu();
+    return;
+  }
+  modal.hidden = true;
+  openButton.focus();
+}
+
 function applyLanguage() {
   const lang = languageSelect?.value === "en" ? "en" : "ar";
   const t = copy[lang];
   modal.dir = lang === "ar" ? "rtl" : "ltr";
+  modal.querySelectorAll(".health-detail-back").forEach((button) => { button.textContent = lang === "en" ? "‹ Back to topics" : "‹ رجوع إلى المواضيع"; });
+  const menuHint = modal.querySelector(".health-menu-hint");
+  if (menuHint) menuHint.textContent = lang === "en" ? "Choose a topic to open its information." : "اختر موضوعًا لفتح صفحة المعلومات الخاصة به.";
   document.getElementById("healthTitle").textContent = t.title;
   modal.querySelector(".health-header p").textContent = t.subtitle;
   modal.querySelector(".health-hero h3").textContent = t.heroTitle;
@@ -78,10 +190,11 @@ function reviewMeasurements() {
   if (!valid) { result.textContent = t.invalid; return; }
   result.textContent = t.summary(age, height, weight);
 }
-openButton.addEventListener("click", () => { applyLanguage(); modal.hidden = false; closeButton.focus(); });
-closeButton.addEventListener("click", () => { modal.hidden = true; openButton.focus(); });
+openButton.addEventListener("click", () => { setupHealthNavigation(); applyLanguage(); showHealthMenu(); modal.hidden = false; closeButton.focus(); });
+closeButton.addEventListener("click", goBackHealth);
 reviewButton.addEventListener("click", reviewMeasurements);
 languageSelect?.addEventListener("change", applyLanguage);
-modal.addEventListener("click", event => { if (event.target === modal) modal.hidden = true; });
-document.addEventListener("keydown", event => { if (event.key === "Escape" && !modal.hidden) { modal.hidden = true; openButton.focus(); } });
+modal.addEventListener("click", event => { if (event.target === modal) goBackHealth(); });
+document.addEventListener("keydown", event => { if (event.key === "Escape" && !modal.hidden) goBackHealth(); });
+setupHealthNavigation();
 applyLanguage();
