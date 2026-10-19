@@ -47,3 +47,26 @@
 .health-topic-body p { margin:5px 0 0;color:#c6d3cc;font-size:13px;line-height:1.85; }
 .health-topic-body b { color:#edf8f1; }
 .health-note { margin:12px 0 0;padding:10px;border-radius:10px;background:#18251f;color:#b8d9c8;font-size:12px;line-height:1.8; }
+
+
+/* Nested topic pages: select a topic, read it separately, then go back one level. */
+.health-view[hidden] { display:none !important; }
+.health-menu-hint { margin:0 3px 10px;color:#a9c8b8;font-size:13px;line-height:1.7; }
+.health-menu-list { display:flex;flex-direction:column;gap:10px; }
+.health-menu-item { display:flex;align-items:center;gap:12px;width:100%;min-height:78px;padding:13px;border:1px solid #2b493c;border-radius:15px;background:linear-gradient(135deg,#17251e,#101714);color:#f1fff8;text-align:start;font:inherit;cursor:pointer; }
+.health-menu-item:active { transform:scale(.99); }
+.health-menu-icon { display:grid;place-items:center;flex:0 0 44px;height:44px;border-radius:13px;background:#20382c;font-size:23px; }
+.health-menu-copy { display:flex;flex-direction:column;gap:5px;flex:1;min-width:0; }
+.health-menu-copy b { font-size:15px;font-weight:850; }
+.health-menu-copy small { color:#aabdb2;font-size:12px;line-height:1.65; }
+.health-menu-arrow { color:#8fd9b6;font-size:27px;font-weight:800; }
+[dir="ltr"] .health-menu-arrow { transform:scaleX(-1); }
+.health-detail-heading { display:flex;align-items:center;gap:12px;margin:0 0 13px; }
+.health-detail-heading h3 { margin:0;color:#eafff2;font-size:19px;line-height:1.45; }
+.health-detail-back { flex-shrink:0;min-height:38px;padding:0 12px;border:1px solid #355748;border-radius:999px;background:#182820;color:#c9f4dc;font:inherit;font-size:12px;font-weight:800; }
+.health-detail-view > .health-card { margin-bottom:10px; }
+.health-detail-view > .health-topic { padding:0; }
+.health-detail-view > .health-topic > summary { display:none; }
+.health-detail-view > .health-topic:not([open]) > .health-topic-body { display:block; }
+.health-detail-view .health-topic-body { padding:14px; }
+@media(max-width:360px) { .health-menu-item{gap:9px;padding:11px}.health-menu-copy b{font-size:14px}.health-detail-heading{gap:8px}.health-detail-heading h3{font-size:17px} }
