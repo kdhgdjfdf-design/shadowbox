@@ -1877,7 +1877,7 @@ document.addEventListener("visibilitychange", () => {
 
 
 /* ---------- مدرّب محلي: بحث في مكتبة معرفة مدمجة دون API ---------- */
-import { searchBoxingKnowledge } from "./knowledge-base.js";
+const searchBoxingKnowledge = (...args) => window.ShadowBoxKnowledge?.searchBoxingKnowledge(...args) || null;
 
 function localCoachReply(question) {
   const q = String(question || "").trim();
