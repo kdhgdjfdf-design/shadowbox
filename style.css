@@ -992,3 +992,17 @@ body.hide-stats .grid { display: none; }
 .three-d-hint {min-height:2.8em;margin:10px 2px 0;color:#c2b8d2;font-size:13px;line-height:1.65}
 @media(max-width:380px){.boxer-3d-stage{height:270px}.move-selector{gap:5px}.move-select{font-size:12px;padding:0 3px}.coach-heading small{font-size:10px}}
 @media(prefers-reduced-motion:reduce){.coach-full-messages{scroll-behavior:auto}}
+
+
+/* Collapsible next-session recommendations in the coach */
+.coach-tips-toggle {
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  width:100%; padding:11px 12px; border:1px solid #383142; border-radius:12px;
+  background:#191620; color:#e8def8; font:inherit; font-size:13px; font-weight:700;
+  text-align:right; cursor:pointer;
+}
+.coach-tips-arrow { flex:0 0 auto; font-size:22px; line-height:1; transition:transform .18s ease; }
+.coach-tips-toggle.is-open .coach-tips-arrow { transform:rotate(180deg); }
+.coach-tips-panel { padding:8px 2px 2px; }
+.coach-tips-panel[hidden] { display:none !important; }
+.coach-tips-panel .tips { margin:6px 0 10px; }
