@@ -50,7 +50,7 @@ const normalize = (value) => String(value || "")
   .replace(/\s+/g, " ")
   .trim();
 
-export function searchBoxingKnowledge(question, language = "ar") {
+function searchBoxingKnowledge(question, language = "ar") {
   const q = normalize(question);
   const tokens = q.split(/\s+/).filter(token => token.length > 1);
   if (!tokens.length) return null;
@@ -83,4 +83,9 @@ export function searchBoxingKnowledge(question, language = "ar") {
     }
   }
   return { answer, sources, topics: chosen.map(item => item.title) };
+}
+
+// Expose the local search API for classic scripts and file:// preview use.
+if (typeof window !== "undefined") {
+  window.ShadowBoxKnowledge = { searchBoxingKnowledge, BOXING_KNOWLEDGE };
 }
