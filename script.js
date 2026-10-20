@@ -1807,10 +1807,11 @@ el.coachChatForm.addEventListener("submit", async (event) => {
   el.coachChatSend.disabled = true;
   el.coachChatStatus.textContent = lang === "en" ? "Preparing local answer…" : "جارٍ تجهيز إجابة محلية…";
   await new Promise(resolve => setTimeout(resolve, 180));
-  addCoachMessage("assistant", localCoachReply(message));
+  const result = localCoachReply(message);
+  addCoachMessage("assistant", result.answer, result.sources || []);
   el.coachChatStatus.textContent = lang === "en"
-    ? "Local guide · no external AI service"
-    : "دليل محلي · لا يستخدم خدمة ذكاء اصطناعي خارجية";
+    ? "Offline knowledge guide · answers are retrieved from the built-in library"
+    : "مكتبة معرفة محلية دون إنترنت · الإجابات مسترجعة من المحتوى المدمج";
   el.coachChatSend.disabled = false;
   el.coachChatInput.focus();
 });
@@ -1875,45 +1876,32 @@ document.addEventListener("visibilitychange", () => {
 });
 
 
-/* ---------- مدرّب محلي: يعمل دون API أو خادم خارجي ---------- */
+/* ---------- مدرّب محلي: بحث في مكتبة معرفة مدمجة دون API ---------- */
+import { searchBoxingKnowledge } from "./knowledge-base.js";
+
 function localCoachReply(question) {
-  const q = String(question || "").toLowerCase();
+  const q = String(question || "").trim();
+  const lower = q.toLowerCase();
   const en = lang === "en";
-  const answers = {
-    safety: en
-      ? "Safety first: use a clear space, keep your phone securely mounted, warm up gently, and stop if you feel pain, dizziness, or unusual shortness of breath. Ask a qualified coach or trusted adult if you are unsure."
-      : "السلامة أولًا: اختر مساحة خالية، وثبّت الهاتف جيدًا، وابدأ بإحماء خفيف. توقّف إذا شعرت بألم أو دوخة أو ضيق نفس غير معتاد، واستشر مدربًا مؤهلًا أو شخصًا بالغًا تثق به عند الحاجة.",
-    warmup: en
-      ? "Try a gentle 5-minute warm-up: easy marching in place, relaxed shoulder circles, comfortable arm movements, and light steps. Keep it easy; this is preparation, not a test."
-      : "جرّب إحماءً خفيفًا لمدة 5 دقائق: المشي في المكان، وتحريك الكتفين بهدوء، وحركات مريحة للذراعين، وخطوات خفيفة. خليك على وتيرة سهلة؛ الهدف الاستعداد وليس اختبار قدرتك.",
-    fitness: en
-      ? "Build general fitness gradually: alternate comfortable movement with rest, keep a pace where you can still talk, and increase only one thing at a time. Consistency matters more than pushing hard."
-      : "طوّر لياقتك بالتدريج: بدّل بين حركة مريحة وراحة، واختر سرعة تستطيع معها الكلام، وزِد عاملًا واحدًا فقط كل مرة. الاستمرار أهم من الضغط على نفسك.",
-    recovery: en
-      ? "Recovery is part of training. Drink water regularly, eat normal balanced meals, get enough sleep, and take a rest day when you feel unusually tired. More training is not always better."
-      : "الراحة جزء من التدريب. اشرب الماء بانتظام، وتناول وجبات متوازنة، ونَمْ بما يكفي، وخذ يوم راحة إذا كان التعب غير معتاد. التدريب الأكثر ليس دائمًا الأفضل.",
-    camera: en
-      ? "For camera tracking, place the phone steadily, use bright light from in front of you, keep your whole upper body in frame, and allow camera permission. Tracking can still make mistakes, so treat the numbers as estimates."
-      : "لتحسين تتبّع الكاميرا: ثبّت الهاتف، واجعل الإضاءة أمامك، وأبقِ الجزء العلوي من جسمك ظاهرًا كاملًا، واسمح بإذن الكاميرا. قد يخطئ التتبّع أحيانًا، لذلك اعتبر الأرقام تقديرية.",
-    progress: en
-      ? "A useful progress check is how regularly you trained, how comfortable the session felt, and whether you recovered well. Do not judge a session by one number alone."
-      : "لمتابعة تقدمك، راقب انتظامك في التدريب، ومدى راحة الجلسة، وجودة تعافيك بعدها. لا تحكم على الجلسة من رقم واحد فقط.",
-    fallback: en
-      ? "I work offline, so my answers come from a small built-in guide rather than live AI. I can help with warm-ups, general fitness, camera setup, recovery, progress tracking, and safety. Try asking about one of those topics."
-      : "أنا مدرّب محلي يعمل دون إنترنت أو API، لذلك إجاباتي من دليل صغير مدمج وليست ذكاءً اصطناعيًا مباشرًا. أقدر أساعدك في الإحماء واللياقة العامة وإعداد الكاميرا والتعافي ومتابعة التقدم والسلامة. اسألني عن أحد هذه المواضيع."
-  };
-  if (/ألم|دوخ|سلام|إصاب|خطر|safety|pain|dizz|injur|unsafe/.test(q)) return answers.safety;
-  if (/إحماء|احماء|warm.?up|warmup|قبل التمرين/.test(q)) return answers.warmup;
-  if (/تعب|لياق|نفس|stamina|fitness|تحمل|تمرين/.test(q)) return answers.fitness;
-  if (/راحة|تعاف|نوم|ماء|recovery|rest|sleep|water/.test(q)) return answers.recovery;
-  if (/كاميرا|camera|إضاءة|إضائه|تتبع|tracking|لا تحسب|ما تحسب/.test(q)) return answers.camera;
-  if (/تقدم|نتيجة|إحصاء|احصاء|progress|stats|تحسن/.test(q)) return answers.progress;
-  if (/كومبو|combo|جاب|كروس|jab|cross|ضرب|لكم|punch|دفاع|حراسة|مراوغ|dodge|weav|footwork|حركة القدم/.test(q)) {
-    return en
-      ? "I can’t coach striking techniques or fight tactics. I can help you train safely without contact: warm-ups, balance, general conditioning, recovery, and how to set up the app."
-      : "ما أقدر أشرح تقنيات الضرب أو تكتيكات القتال. أقدر أساعدك بتدريب آمن دون احتكاك: الإحماء والتوازن واللياقة العامة والتعافي وإعداد التطبيق.";
+  const safety = en
+    ? "Safety first: use a clear space and suitable equipment. Stop if you feel pain, dizziness, or unusual shortness of breath, and tell a trusted adult. This guide is general information, not medical advice."
+    : "السلامة أولًا: اختر مساحة خالية ومعدات مناسبة. توقف إذا شعرت بألم أو دوخة أو ضيق نفس غير معتاد، وأخبر شخصًا بالغًا تثق به. هذه معلومات عامة وليست تشخيصًا طبيًا.";
+  if (/ألم|دوخ|سلام|إصاب|خطر|safety|pain|dizz|injur|unsafe|ضيق نفس/.test(lower)) {
+    return { answer: safety, sources: [{title: en ? "MedlinePlus — Sports Injuries" : "MedlinePlus — الإصابات الرياضية", url:"https://medlineplus.gov/sportsinjuries.html"}] };
   }
-  return answers.fallback;
+  if (en) {
+    if (/warm.?up|warmup/.test(lower)) return { answer:"Try a few minutes of easy movement, relaxed shoulder circles and comfortable steps. Increase effort gradually; stop if you feel pain or dizziness.", sources:[{title:"American Heart Association — Warm-up and Cool-down",url:"https://www.heart.org/en/healthy-living/fitness/fitness-basics/warm-up-cool-down"}] };
+    if (/fitness|stamina|conditioning|exercise/.test(lower)) return { answer:"Build general fitness gradually, vary activities and include rest. Choose a pace appropriate for your age and current ability; you do not need to make every session intense.", sources:[{title:"CDC — Physical Activity for Children",url:"https://www.cdc.gov/physical-activity-basics/guidelines/children.html"}] };
+    if (/rest|recovery|sleep|water|hydration/.test(lower)) return { answer:"Recovery is part of training: get enough sleep, eat balanced meals, drink water regularly and rest when unusually tired. Ask a trusted adult or health professional about persistent symptoms.", sources:[{title:"NHS — Exercise",url:"https://www.nhs.uk/live-well/exercise/"}] };
+    if (/camera|tracking|count|miss|punch/.test(lower)) return { answer:"For camera tracking, secure the phone, use front lighting and keep your shoulders and hands in frame. Tracking from one camera is only an estimate and can miss or miscount movement.", sources:[] };
+    return { answer:"The built-in knowledge library is currently strongest in Arabic. Try asking in Arabic about boxing basics, stance, guard, jab, cross, footwork, warm-up, recovery, safety or camera tracking. This is offline retrieval, not a generative AI model.", sources:[] };
+  }
+  const found = searchBoxingKnowledge(q, "ar");
+  if (found) return { answer: found.answer, sources: found.sources };
+  return {
+    answer: "لم أجد في المكتبة المحلية معلومات كافية للإجابة بثقة. جرّب سؤالًا أكثر تحديدًا عن أساسيات الملاكمة أو الوقفة أو الحراسة أو اللكمات أو حركة القدمين أو الإحماء أو التعافي أو السلامة أو الكاميرا. هذه مكتبة بحث محلية وليست نموذج ذكاء اصطناعي توليديًا، لذلك لن أخمّن عند نقص المعلومات.",
+    sources: []
+  };
 }
 
 /* ---------- شخصية ملاكم بشرية ثلاثية الأبعاد ---------- */
