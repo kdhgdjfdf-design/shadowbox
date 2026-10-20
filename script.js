@@ -1701,14 +1701,29 @@ function typeRows(arr) {
 
 function renderCoach() {
   const a = analyzeSessions(loadSessions());
-  if (!a) {
-    el.coachBody.innerHTML = `<p class="notice">${t("coach_empty")}</p><p class="notice small">${t("coach_note")}</p>`;
-    return;
-  }
+  const recommendations = a
+    ? `<ul class="tips">${a.tips.map((x) => `<li>${x}</li>`).join("")}</ul>`
+    : `<p class="notice">${t("coach_empty")}</p>`;
+
+  // Keep next-session recommendations collapsed by default; the arrow reveals them.
   el.coachBody.innerHTML = `
-    <h3 class="section-title">${t("coach_tips_title")}</h3>
-    <ul class="tips">${a.tips.map((x) => `<li>${x}</li>`).join("")}</ul>
-    <p class="notice small">${t("coach_note")}</p>`;
+    <button type="button" class="coach-tips-toggle" aria-expanded="false" aria-controls="coachTipsPanel">
+      <span>${t("coach_tips_title")}</span>
+      <span class="coach-tips-arrow" aria-hidden="true">⌄</span>
+    </button>
+    <div id="coachTipsPanel" class="coach-tips-panel" hidden>
+      ${recommendations}
+      <p class="notice small">${t("coach_note")}</p>
+    </div>`;
+
+  const toggle = el.coachBody.querySelector(".coach-tips-toggle");
+  const panel = el.coachBody.querySelector("#coachTipsPanel");
+  toggle.addEventListener("click", () => {
+    const expanded = toggle.getAttribute("aria-expanded") === "true";
+    toggle.setAttribute("aria-expanded", String(!expanded));
+    panel.hidden = expanded;
+    toggle.classList.toggle("is-open", !expanded);
+  });
 }
 
 function clearHistory() {
