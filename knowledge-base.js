@@ -54,6 +54,20 @@ function searchBoxingKnowledge(question, language = "ar") {
   const q = normalize(question);
   if (!q) return null;
 
+  // Route history questions before fuzzy matching: the shared word "الملاكمة"
+  // must not make a history question return stance or beginner basics.
+  const historyIntent = /تاريخ|نشاه|نشاة|اصل الملاكمه|كيف بدات الملاكمه|متى بدات الملاكمه|history|origin of boxing|boxing began|boxing history/.test(q);
+  if (historyIntent) {
+    return {
+      answer: "للملاكمة جذور قديمة؛ فقد عُرفت أشكال من القتال بالقبضتين في حضارات قديمة، وأصبحت الملاكمة رياضة منظمة في اليونان القديمة، وأُدرجت في الألعاب الأولمبية القديمة عام 688 قبل الميلاد بحسب المراجع التاريخية الشائعة. أما الملاكمة الحديثة فتطورت خصوصًا في بريطانيا خلال القرنين السابع عشر والثامن عشر، ثم ساعدت قواعد كوينزبري التي نُشرت عام 1867 على تنظيم القتال بالقفازات والجولات. لاحقًا تطورت اتحادات الهواة والاحتراف، وأصبحت الملاكمة جزءًا من الألعاب الأولمبية الحديثة منذ 1904، مع تغيّر بعض تفاصيل مشاركتها عبر الدورات.\n\nباختصار: الملاكمة انتقلت من ممارسة قديمة إلى رياضة حديثة لها قواعد وأوزان وحكام ومنافسات للهواة والمحترفين.",
+      sources: [
+        { title: "Encyclopaedia Britannica — Boxing", url: "https://www.britannica.com/sports/boxing" },
+        { title: "Olympics — Boxing", url: "https://olympics.com/en/sports/boxing/" }
+      ],
+      topics: ["تاريخ الملاكمة"]
+    };
+  }
+
   // Route clear question intents before fuzzy matching. This prevents words such as
   // "عدد" or "الملاكمة" from accidentally selecting an unrelated health topic.
   const competitionIntent = /بطوله|بطولات|بطوله العالم|بطوله عالميه|بطولات العالم|القاب|لقب|احزمه|حزام|championship|championships|titles|belts|boxing tournament/.test(q);
