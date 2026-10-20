@@ -52,24 +52,53 @@ const normalize = (value) => String(value || "")
 
 function searchBoxingKnowledge(question, language = "ar") {
   const q = normalize(question);
-  const tokens = q.split(/\s+/).filter(token => token.length > 1);
+  if (!q) return null;
+
+  // Route clear question intents before fuzzy matching. This prevents words such as
+  // "عدد" or "الملاكمة" from accidentally selecting an unrelated health topic.
+  const competitionIntent = /بطوله|بطولات|بطوله العالم|بطوله عالميه|بطولات العالم|القاب|لقب|احزمه|حزام|championship|championships|titles|belts|boxing tournament/.test(q);
+  if (competitionIntent) {
+    return {
+      answer: "لا يوجد عدد واحد ثابت لكل بطولات الملاكمة. توجد بطولات للهواة والمنتخبات، مثل المنافسات الأولمبية وبطولات الاتحاد الدولي، وتوجد في الملاكمة الاحترافية منظمات مختلفة تمنح ألقابًا وأحزمة عالمية، لذلك يتغير العدد بحسب ما تقصده وبحسب الفئة والاتحاد والفترة الزمنية. هل تقصد البطولات الأولمبية، أم بطولات العالم للهواة، أم ألقاب الملاكمة الاحترافية؟",
+      sources: [
+        { title: "Olympics — Boxing", url: "https://olympics.com/en/sports/boxing/" },
+        { title: "International Boxing Association (IBA)", url: "https://www.iba.sport/" },
+        { title: "World Boxing Council (WBC)", url: "https://wbcboxing.com/" }
+      ],
+      topics: ["بطولات الملاكمة وألقابها"]
+    };
+  }
+
+  const stopWords = new Set([
+    "ما","ماذا","كيف","هل","كم","عدد","في","من","عن","على","الى","إلى","و","او","أو",
+    "هو","هي","هذا","هذه","ماهو","ماهي","اريد","أريد","اشرح","لي","لل","ال","the","what",
+    "how","many","is","are","of","for","in","on","a","an","and","boxing"
+  ]);
+  const tokens = q.split(/\s+/).filter(token => token.length > 1 && !stopWords.has(token));
   if (!tokens.length) return null;
+
   const ranked = BOXING_KNOWLEDGE.map(item => {
-    const title = normalize(item.title);
-    const keywords = normalize(item.keywords);
-    const body = normalize(item.body);
+    const titleTokens = normalize(item.title).split(/\s+/);
+    const keywordTokens = normalize(item.keywords).split(/\s+/);
+    const bodyTokens = normalize(item.body).split(/\s+/);
     let score = 0;
     for (const token of tokens) {
-      if (title.includes(token)) score += 5;
-      if (keywords.includes(token)) score += 4;
-      if (body.includes(token)) score += 1;
+      if (titleTokens.includes(token)) score += 7;
+      if (keywordTokens.includes(token)) score += 4;
+      if (bodyTokens.includes(token)) score += 1;
     }
-    if (normalize(item.id).split("-").some(part => tokens.includes(part))) score += 2;
-    return { item, score };
+    return { item, score, matched: tokens.filter(token => titleTokens.includes(token) || keywordTokens.includes(token)).length };
   }).filter(entry => entry.score > 0).sort((a,b) => b.score - a.score);
-  if (!ranked.length || ranked[0].score < 3) return null;
+
+  // Require a meaningful match in the title/keywords, not a weak incidental body match.
+  if (!ranked.length || ranked[0].matched === 0 || ranked[0].score < 4) return null;
   const best = ranked[0].score;
-  const chosen = ranked.filter(entry => entry.score >= Math.max(3, best * 0.52)).slice(0, 2).map(entry => entry.item);
+  const chosen = ranked
+    .filter(entry => entry.matched > 0 && entry.score >= Math.max(4, best * 0.58))
+    .slice(0, 2)
+    .map(entry => entry.item);
+  if (!chosen.length) return null;
+
   const answer = chosen.map(item => item.title + ": " + item.body).join("\n\n");
   const sources = [];
   const seen = new Set();
