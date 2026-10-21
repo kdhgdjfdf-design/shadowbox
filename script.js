@@ -14,6 +14,8 @@ const MODEL_URL =
   "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
 const STORAGE_KEY = "shadowbox_sessions_v1";
 const PREFS_KEY = "shadowbox_prefs_v1";
+// Public Worker endpoint only; provider secrets remain on the Worker, never in this app.
+const COACH_API_URL = "https://shadowbox-nox-coach.kdhgdjfdf.workers.dev";
 
 // ---------- ثوابت الكشف عن اللكمات (قابلة للضبط) ----------
 const CFG = {
@@ -1820,20 +1822,50 @@ el.coachChatForm.addEventListener("submit", async (event) => {
   addCoachMessage("user", message);
   el.coachChatInput.value = "";
   el.coachChatSend.disabled = true;
-  el.coachChatStatus.textContent = lang === "en" ? "Preparing local answer…" : "جارٍ تجهيز إجابة محلية…";
-  await new Promise(resolve => setTimeout(resolve, 180));
-  const result = localCoachReply(message);
-  addCoachMessage("assistant", result.answer, result.sources || []);
-  el.coachChatStatus.textContent = lang === "en"
-    ? "Offline knowledge guide · answers are retrieved from the built-in library"
-    : "مكتبة معرفة محلية دون إنترنت · الإجابات مسترجعة من المحتوى المدمج";
-  el.coachChatSend.disabled = false;
-  el.coachChatInput.focus();
+  el.coachChatStatus.textContent = lang === "en" ? "Coach is thinking…" : "المدرّب يفكّر…";
+
+  // Only a numeric training summary is shared for coaching context; camera frames are never sent.
+  const analysis = analyzeSessions(loadSessions());
+  try {
+    const response = await fetch(COACH_API_URL.replace(/\/$/, "") + "/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message,
+        language: lang,
+        stats: analysis ? {
+          sessions: analysis.sessions,
+          avgPpm: analysis.avgPpm,
+          glovePct: analysis.glovePct,
+          dodgePct: analysis.dodgePct
+        } : null
+      })
+    });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const data = await response.json();
+    if (!data || typeof data.reply !== "string" || !data.reply.trim()) {
+      throw new Error("Invalid coach response");
+    }
+    addCoachMessage("assistant", data.reply.trim(), data.sources || []);
+    el.coachChatStatus.textContent = lang === "en"
+      ? "Connected to ShadowBox Nox Coach"
+      : "متصل بمدرّب ShadowBox Nox";
+  } catch (error) {
+    // Keep the coach useful if the Worker is unavailable.
+    const result = localCoachReply(message);
+    addCoachMessage("assistant", result.answer, result.sources || []);
+    el.coachChatStatus.textContent = lang === "en"
+      ? "Offline fallback · using the built-in knowledge library"
+      : "وضع احتياطي دون اتصال · الإجابة من مكتبة المعرفة المدمجة";
+  } finally {
+    el.coachChatSend.disabled = false;
+    el.coachChatInput.focus();
+  }
 });
 
 // الأقسام الأربعة في الرئيسية
 el.btnTraining.addEventListener("click", () => showScreen("trainMenu"));
-el.btnLearn.addEventListener("click", () => { showScreen("learn"); initBoxer3D(); });
+el.btnLearn.addEventListener("click", () => showScreen("learn"));
 el.btnTrainBack.addEventListener("click", () => showScreen("home"));
 el.btnLearnBack.addEventListener("click", () => showScreen("home"));
 
